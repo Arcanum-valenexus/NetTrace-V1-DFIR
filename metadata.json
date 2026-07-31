@@ -1,0 +1,6 @@
+{
+  "name": "NetTrace - Network Forensics & Incident Reconstruction Platform",
+  "description": "Trace Every Packet. Reveal Every Attack.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
