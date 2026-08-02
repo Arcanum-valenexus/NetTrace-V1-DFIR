@@ -8,8 +8,20 @@ class LoginRequest(BaseSchema):
     password: str
 
 
+class UserRegisterRequest(BaseSchema):
+    fullName: str
+    email: EmailStr
+    password: str
+    role: Optional[str] = "Lead DFIR Investigator"
+
+
 class RefreshTokenRequest(BaseSchema):
     refresh_token: str
+
+
+class PasswordChangeRequest(BaseSchema):
+    current_password: str
+    new_password: str
 
 
 class AuthTokenResponse(BaseSchema):

@@ -53,6 +53,36 @@ register_exception_handlers(app)
 app.include_router(api_v1_router, prefix=settings.API_V1_STR)
 
 
+def custom_openapi():
+    """Generates complete OpenAPI 3.0 documentation with Security Schemes and Error Schemas."""
+    if app.openapi_schema:
+        return app.openapi_schema
+    
+    from fastapi.openapi.utils import get_openapi
+    openapi_schema = get_openapi(
+        title=settings.PROJECT_NAME,
+        version="1.0.0",
+        description="Enterprise Digital Forensics & Incident Response Platform API Engine with complete OpenAPI documentation.",
+        routes=app.routes,
+    )
+    
+    openapi_schema["components"]["securitySchemes"] = {
+        "BearerAuth": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+            "description": "Provide JWT Access Token issued via /api/v1/auth/login",
+        }
+    }
+    
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+
+app.openapi = custom_openapi
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
+

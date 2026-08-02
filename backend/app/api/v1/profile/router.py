@@ -1,3 +1,3 @@
-from fastapi import APIRouter
+from app.api.v1.users.router import router
 
-router = APIRouter(prefix="/profile", tags=["User Profile"])
+__all__ = ["router"]

@@ -1,20 +1,27 @@
-from datetime import datetime
 from typing import Optional
 from app.schemas.base import BaseSchema
 
 
-class CaseBase(BaseSchema):
-    case_number: str
+class CaseCreateSchema(BaseSchema):
     title: str
     description: Optional[str] = None
-    status: str = "Active"
-    priority: str = "High"
+    priority: Optional[str] = "High"
 
 
-class CaseCreate(CaseBase):
-    pass
+class CaseUpdateSchema(BaseSchema):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+    priority: Optional[str] = None
 
 
-class CaseResponse(CaseBase):
+class CaseResponseSchema(BaseSchema):
     id: str
-    created_at: datetime
+    caseNumber: str
+    title: str
+    description: Optional[str] = None
+    status: str
+    priority: str
+    createdBy: str
+    createdAt: str
+    updatedAt: str

@@ -8,7 +8,6 @@ from app.api.v1.reports.router import router as reports_router
 from app.api.v1.pcap.router import router as pcap_router
 from app.api.v1.ioc.router import router as ioc_router
 from app.api.v1.dashboard.router import router as dashboard_router
-from app.api.v1.profile.router import router as profile_router
 from app.api.v1.settings.router import router as settings_router
 
 api_v1_router = APIRouter()
@@ -33,5 +32,5 @@ api_v1_router.include_router(reports_router)
 api_v1_router.include_router(pcap_router)
 api_v1_router.include_router(ioc_router)
 api_v1_router.include_router(dashboard_router)
-api_v1_router.include_router(profile_router)
 api_v1_router.include_router(settings_router)
+

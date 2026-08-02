@@ -1,22 +1,50 @@
-from typing import Any, Dict, List
-from app.core.logging import logger, log_audit_event
+from datetime import datetime, timezone
+from typing import Dict, Any
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.repositories.evidence_repository import EvidenceRepository
+from app.repositories.audit_repository import AuditRepository
 
 
 class ChainOfCustodyService:
-    """Service interface placeholder for digital evidence chain of custody auditing."""
+    """Service enforcing Digital Chain of Custody logging and audit verification."""
 
-    async def log_evidence_transfer(self, evidence_id: str, released_by: str, received_by: str, purpose: str) -> Dict[str, Any]:
-        """Chain of custody transfer logging placeholder."""
-        logger.info("ChainOfCustodyService.log_evidence_transfer called", evidence_id=evidence_id)
-        log_audit_event("EVIDENCE_TRANSFER", released_by, "TRANSFER_CUSTODY", {"evidence_id": evidence_id, "received_by": received_by, "purpose": purpose})
-        return {
-            "evidence_id": evidence_id,
-            "released_by": released_by,
-            "received_by": received_by,
-            "verified": True,
-            "status": "custody_logged"
-        }
+    def __init__(self, session: AsyncSession):
+        self.session = session
+        self.evidence_repo = EvidenceRepository(session)
+        self.audit_repo = AuditRepository(session)
 
-    async def get_audit_trail(self, evidence_id: str) -> List[Dict[str, Any]]:
-        """Audit trail retrieval placeholder."""
-        return []
+    async def log_custody_event(
+        self,
+        evidence_id: str,
+        action: str,
+        actor: str,
+        notes: str,
+        investigator_id: str = "usr-alex-01"
+    ) -> Dict[str, Any]:
+        """Logs digital chain of custody transfer inside an atomic transaction."""
+        async with self.session.begin():
+            entry = await self.evidence_repo.add_custody_entry(
+                evidence_id=evidence_id,
+                action=action,
+                actor=actor,
+                investigator_id=investigator_id,
+                investigator_name=actor,
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                notes=notes,
+            )
+
+            await self.audit_repo.log_event(
+                event_type="CHAIN_OF_CUSTODY_LOG",
+                actor_id=investigator_id,
+                action=action,
+                details={"evidence_id": evidence_id, "notes": notes},
+            )
+
+            return {
+                "id": entry.id,
+                "evidenceId": entry.evidence_id,
+                "action": entry.action,
+                "actor": entry.actor,
+                "timestamp": entry.timestamp,
+                "notes": entry.notes,
+            }

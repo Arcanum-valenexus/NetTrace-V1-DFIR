@@ -1,13 +1,10 @@
+import bcrypt
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from pydantic import BaseModel
 from app.core.config import settings
-
-# Password Crypt Context
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 class RoleEnum(str, Enum):
@@ -40,13 +37,19 @@ class TokenData(BaseModel):
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify plain password against hashed password."""
-    return pwd_context.verify(plain_password, hashed_password)
+    """Verify plain password against bcrypt hashed password."""
+    try:
+        return bcrypt.checkpw(plain_password.encode('utf-8')[:72], hashed_password.encode('utf-8'))
+    except Exception:
+        return False
 
 
 def get_password_hash(password: str) -> str:
     """Generate bcrypt hash for password."""
-    return pwd_context.hash(password)
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password.encode('utf-8')[:72], salt)
+    return hashed.decode('utf-8')
+
 
 
 def create_access_token(subject: str, email: str, role: str, permissions: List[str], expires_delta: Optional[timedelta] = None) -> str:
