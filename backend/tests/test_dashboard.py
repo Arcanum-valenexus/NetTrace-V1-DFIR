@@ -1,12 +1,14 @@
 import pytest
 from httpx import AsyncClient, ASGITransport
 from app.main import app
+from tests.conftest import get_authenticated_headers
 
 
 @pytest.mark.asyncio
 async def test_dashboard_metrics():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        res = await client.get("/api/v1/dashboard/metrics")
+        headers = await get_authenticated_headers(client)
+        res = await client.get("/api/v1/dashboard/metrics", headers=headers)
         assert res.status_code == 200
         data = res.json()["data"]
         assert "activeIncidents" in data

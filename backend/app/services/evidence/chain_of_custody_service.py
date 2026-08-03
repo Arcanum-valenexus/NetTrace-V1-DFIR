@@ -19,7 +19,7 @@ class ChainOfCustodyService:
         action: str,
         actor: str,
         notes: str,
-        investigator_id: str = "usr-alex-01"
+        investigator_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """Logs digital chain of custody transfer inside an atomic transaction."""
         async with self.session.begin():

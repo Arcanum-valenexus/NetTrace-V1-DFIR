@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends, UploadFile, File, Form, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.dependencies import get_current_user_token
-from app.core.security import TokenData
+from app.core.dependencies import get_current_user_token, require_permissions
+from app.core.security import TokenData, PermissionEnum
 from app.utils.file_validation import validate_file_upload, generate_secure_storage_path
 from app.services.evidence.hash_service import HashService
 from app.services.storage.storage_service import StorageService
@@ -21,6 +21,7 @@ router = APIRouter(prefix="/evidence", tags=["Evidence Vault & Custody"])
 async def list_evidence(
     category: Optional[str] = None,
     case_id: Optional[str] = None,
+    token_data: TokenData = Depends(require_permissions([PermissionEnum.CASES_READ])),
     db: AsyncSession = Depends(get_db)
 ):
     """Lists active evidence artifacts in vault."""
@@ -64,10 +65,10 @@ async def list_evidence(
 async def upload_evidence(
     file: UploadFile = File(...),
     category: str = Form("PCAP Trace"),
-    caseId: str = Form("CASE-2026-001"),
-    incidentId: str = Form("inc-1"),
+    caseId: str = Form(...),
+    incidentId: str = Form(...),
     description: Optional[str] = Form(None),
-    token_data: TokenData = Depends(get_current_user_token),
+    token_data: TokenData = Depends(require_permissions([PermissionEnum.EVIDENCE_UPLOAD])),
     db: AsyncSession = Depends(get_db)
 ):
     """Uploads forensic evidence artifact, validates extensions/size, computes SHA256/MD5 hashes, and logs custody entry."""
@@ -87,6 +88,7 @@ async def upload_evidence(
         evidence_repo = EvidenceRepository(db)
         audit_repo = AuditRepository(db)
         
+        uploader = token_data.email or token_data.sub
         artifact = await evidence_repo.create(
             case_id=caseId,
             incident_id=incidentId,
@@ -97,7 +99,9 @@ async def upload_evidence(
             hash_sha256=hashes["sha256"],
             hash_md5=hashes["md5"],
             uploaded_at=datetime.now(timezone.utc).isoformat(),
-            uploaded_by="Alex Mercer",
+            uploaded_by=uploader,
+            owner_investigator_id=token_data.sub,
+            owner_investigator_name=uploader,
             storage_path=storage_path,
         )
         
@@ -105,14 +109,16 @@ async def upload_evidence(
             evidence_id=artifact.id,
             case_id=caseId,
             action="Evidence Ingested & Hashed",
-            actor="Alex Mercer",
+            actor=uploader,
+            investigator_id=token_data.sub,
+            investigator_name=uploader,
             timestamp=artifact.uploaded_at,
             notes=f"SHA256: {hashes['sha256']}",
         )
         
         await audit_repo.log_event(
             event_type="EVIDENCE_UPLOAD",
-            actor_id=token_data.sub or "usr-alex-01",
+            actor_id=token_data.sub,
             action="UPLOAD_EVIDENCE",
             details={"evidence_id": artifact.id, "filename": sanitized_filename, "sha256": hashes["sha256"]},
         )
@@ -153,17 +159,17 @@ async def upload_evidence(
 @router.delete("/{evidence_id}", response_model=ResponseEnvelope[dict], summary="Soft Delete Evidence Artifact")
 async def delete_evidence(
     evidence_id: str,
-    token_data: TokenData = Depends(get_current_user_token),
+    token_data: TokenData = Depends(require_permissions([PermissionEnum.EVIDENCE_DELETE])),
     db: AsyncSession = Depends(get_db)
 ):
     """Soft deletes evidence artifact while preserving audit logs."""
     async with db.begin():
         evidence_repo = EvidenceRepository(db)
         audit_repo = AuditRepository(db)
-        await evidence_repo.soft_delete_evidence(evidence_id, deleted_by=token_data.sub or "usr-alex-01")
+        await evidence_repo.soft_delete_evidence(evidence_id, deleted_by=token_data.sub)
         await audit_repo.log_event(
             event_type="EVIDENCE_DELETED",
-            actor_id=token_data.sub or "usr-alex-01",
+            actor_id=token_data.sub,
             action="SOFT_DELETE_EVIDENCE",
             details={"evidence_id": evidence_id},
         )

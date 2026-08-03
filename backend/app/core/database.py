@@ -31,8 +31,29 @@ class Base(DeclarativeBase):
     pass
 
 
+_schema_initialized = False
+
+
+async def ensure_db_schema() -> None:
+    """Create database schema if it has not been created yet."""
+    global _schema_initialized
+    if _schema_initialized:
+        return
+
+    # Import models to register SQLAlchemy metadata before creation.
+    import app.models  # noqa: F401
+
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    _schema_initialized = True
+
+
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Dependency injection provider for Async SQLAlchemy Session."""
+    if settings.ENVIRONMENT == "development":
+        await ensure_db_schema()
+
     async with AsyncSessionLocal() as session:
         try:
             yield session

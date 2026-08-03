@@ -3,6 +3,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 import structlog
+import traceback
 
 logger = structlog.get_logger("nettrace.exception")
 
@@ -61,12 +62,14 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+        tb = traceback.format_exc()
         logger.error(
             "Unhandled System Exception",
             path=request.url.path,
             error=str(exc),
             error_type=exc.__class__.__name__,
             exc_info=True,
+            traceback=tb,
         )
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -75,6 +78,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                 "error": {
                     "code": "INTERNAL_SERVER_ERROR",
                     "message": "An unexpected internal server error occurred.",
+                    "traceback": tb,
                 }
             }
         )

@@ -26,12 +26,12 @@ class Settings(BaseSettings):
 
     # Database Settings
     DATABASE_URL: str = Field(
-        default="postgresql+asyncpg://postgres:postgres@localhost:5432/nettrace_db",
-        description="Async PostgreSQL connection string"
+        default="sqlite+aiosqlite:///./nettrace.db",
+        description="Async database connection string"
     )
     SYNC_DATABASE_URL: str = Field(
-        default="postgresql://postgres:postgres@localhost:5432/nettrace_db",
-        description="Sync PostgreSQL connection string for Alembic"
+        default="sqlite:///./nettrace.db",
+        description="Sync database connection string for Alembic or local tooling"
     )
 
     # Supabase Integration

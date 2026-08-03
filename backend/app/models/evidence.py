@@ -7,8 +7,8 @@ from app.models.base import Base, BaseModelMixin, SoftDeleteMixin
 class EvidenceArtifactModel(Base, BaseModelMixin, SoftDeleteMixin):
     __tablename__ = "evidence_artifacts"
 
-    case_id: Mapped[str] = mapped_column(String(100), default="CASE-2026-001", index=True)
-    incident_id: Mapped[str] = mapped_column(String(100), default="inc-1", index=True)
+    case_id: Mapped[str] = mapped_column(String(100), default="", index=True)
+    incident_id: Mapped[str] = mapped_column(String(100), default="", index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     category: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

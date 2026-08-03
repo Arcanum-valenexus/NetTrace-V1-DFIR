@@ -12,4 +12,4 @@ class CaseModel(Base, BaseModelMixin, SoftDeleteMixin):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="Active", index=True)
     priority: Mapped[str] = mapped_column(String(50), default="High")
-    created_by: Mapped[str] = mapped_column(String(255), default="Alex Mercer")
+    created_by: Mapped[str] = mapped_column(String(255), default="")

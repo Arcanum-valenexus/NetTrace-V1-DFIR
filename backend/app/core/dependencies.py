@@ -15,12 +15,10 @@ async def get_current_user_token(
 ) -> TokenData:
     """Dependency to extract and validate Bearer JWT token."""
     if not credentials:
-        # Placeholder fallback for initial foundation testing
-        return TokenData(
-            sub="usr-system-admin",
-            email="admin@nettrace.enterprise",
-            role=RoleEnum.LEAD_DFIR,
-            permissions=[p.value for p in PermissionEnum],
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing authentication credentials",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     token_data = decode_access_token(credentials.credentials)

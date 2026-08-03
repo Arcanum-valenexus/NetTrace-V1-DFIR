@@ -27,7 +27,7 @@ class CaseService:
                 description=payload.description or "DFIR Case Investigation",
                 status="Active",
                 priority=payload.priority or "High",
-                created_by="Alex Mercer",
+                created_by=actor_id,
             )
 
             await self.audit_repo.log_event(

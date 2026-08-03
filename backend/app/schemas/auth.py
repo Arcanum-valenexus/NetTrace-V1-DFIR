@@ -16,7 +16,12 @@ class UserRegisterRequest(BaseSchema):
 
 
 class RefreshTokenRequest(BaseSchema):
-    refresh_token: str
+    refresh_token: Optional[str] = None
+    refreshToken: Optional[str] = None
+
+    @property
+    def token(self) -> str:
+        return self.refresh_token or self.refreshToken or ""
 
 
 class PasswordChangeRequest(BaseSchema):

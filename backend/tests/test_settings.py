@@ -1,19 +1,22 @@
 import pytest
 from httpx import AsyncClient, ASGITransport
 from app.main import app
+from tests.conftest import get_authenticated_headers
 
 
 @pytest.mark.asyncio
 async def test_platform_settings():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        headers = await get_authenticated_headers(client)
+
         # Get settings
-        res_get = await client.get("/api/v1/settings")
+        res_get = await client.get("/api/v1/settings", headers=headers)
         assert res_get.status_code == 200
         data = res_get.json()["data"]
         assert "theme" in data
         assert "language" in data
 
         # Update settings
-        res_put = await client.put("/api/v1/settings", json={"theme": "dark-matrix", "timeFormat": "12 Hour"})
+        res_put = await client.put("/api/v1/settings", json={"theme": "dark-matrix", "timeFormat": "12 Hour"}, headers=headers)
         assert res_put.status_code == 200
         assert res_put.json()["data"]["theme"] == "dark-matrix"

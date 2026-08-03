@@ -52,12 +52,71 @@ def get_password_hash(password: str) -> str:
 
 
 
-def create_access_token(subject: str, email: str, role: str, permissions: List[str], expires_delta: Optional[timedelta] = None) -> str:
+DEFAULT_ROLE_PERMISSIONS: Dict[str, List[str]] = {
+    RoleEnum.SUPER_ADMIN.value: [
+        PermissionEnum.CASES_READ.value,
+        PermissionEnum.CASES_WRITE.value,
+        PermissionEnum.INCIDENTS_READ.value,
+        PermissionEnum.INCIDENTS_WRITE.value,
+        PermissionEnum.EVIDENCE_UPLOAD.value,
+        PermissionEnum.EVIDENCE_DELETE.value,
+        PermissionEnum.PCAP_ANALYZE.value,
+        PermissionEnum.REPORTS_GENERATE.value,
+        PermissionEnum.SYSTEM_SETTINGS.value,
+    ],
+    RoleEnum.LEAD_DFIR.value: [
+        PermissionEnum.CASES_READ.value,
+        PermissionEnum.CASES_WRITE.value,
+        PermissionEnum.INCIDENTS_READ.value,
+        PermissionEnum.INCIDENTS_WRITE.value,
+        PermissionEnum.EVIDENCE_UPLOAD.value,
+        PermissionEnum.EVIDENCE_DELETE.value,
+        PermissionEnum.PCAP_ANALYZE.value,
+        PermissionEnum.REPORTS_GENERATE.value,
+        PermissionEnum.SYSTEM_SETTINGS.value,
+    ],
+    RoleEnum.SECURITY_ANALYST.value: [
+        PermissionEnum.CASES_READ.value,
+        PermissionEnum.CASES_WRITE.value,
+        PermissionEnum.INCIDENTS_READ.value,
+        PermissionEnum.INCIDENTS_WRITE.value,
+        PermissionEnum.EVIDENCE_UPLOAD.value,
+        PermissionEnum.PCAP_ANALYZE.value,
+        PermissionEnum.REPORTS_GENERATE.value,
+    ],
+    RoleEnum.INCIDENT_RESPONDER.value: [
+        PermissionEnum.CASES_READ.value,
+        PermissionEnum.INCIDENTS_READ.value,
+        PermissionEnum.INCIDENTS_WRITE.value,
+        PermissionEnum.EVIDENCE_UPLOAD.value,
+        PermissionEnum.PCAP_ANALYZE.value,
+    ],
+    RoleEnum.AUDITOR.value: [
+        PermissionEnum.CASES_READ.value,
+        PermissionEnum.INCIDENTS_READ.value,
+        PermissionEnum.REPORTS_GENERATE.value,
+    ],
+    RoleEnum.READ_ONLY.value: [
+        PermissionEnum.CASES_READ.value,
+        PermissionEnum.INCIDENTS_READ.value,
+    ],
+}
+
+
+def get_permissions_for_role(role: str) -> List[str]:
+    """Retrieve default permissions array for a given system role."""
+    return DEFAULT_ROLE_PERMISSIONS.get(role, DEFAULT_ROLE_PERMISSIONS[RoleEnum.LEAD_DFIR.value])
+
+
+def create_access_token(subject: str, email: str, role: str, permissions: Optional[List[str]] = None, expires_delta: Optional[timedelta] = None) -> str:
     """Generate JWT Access Token."""
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
     else:
         expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+
+    if permissions is None:
+        permissions = get_permissions_for_role(role)
 
     to_encode: Dict[str, Any] = {
         "sub": subject,
@@ -100,3 +159,18 @@ def decode_access_token(token: str) -> Optional[TokenData]:
         )
     except JWTError:
         return None
+
+
+def decode_refresh_token(token: str) -> Optional[TokenData]:
+    """Decode and validate refresh token using JWT_REFRESH_SECRET."""
+    try:
+        payload = jwt.decode(token, settings.JWT_REFRESH_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        if payload.get("type") != "refresh":
+            return None
+        return TokenData(
+            sub=payload.get("sub"),
+            exp=payload.get("exp"),
+        )
+    except JWTError:
+        return None
+

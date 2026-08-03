@@ -35,7 +35,7 @@ class ReportService:
             sections = {
                 "coverPage": {
                     "title": f"Forensics Report: {incident.title}",
-                    "caseId": payload.case_id or "CASE-2026-001",
+                    "caseId": payload.case_id or "",
                     "reportId": report_no,
                     "generatedDate": now_iso,
                     "leadInvestigator": incident.assigned_analyst,
@@ -92,10 +92,10 @@ class ReportService:
                 report_number=report_no,
                 version=1,
                 incident_id=incident.id,
-                case_id=payload.case_id or "CASE-2026-001",
+                case_id=payload.case_id or "",
                 incident_title=incident.title,
                 generated_at=now_iso,
-                generated_by=incident.assigned_analyst,
+                generated_by=actor_id,
                 organization="Cyber Defense & Forensics Labs",
                 status="Draft",
                 report_hash=report_hash,
@@ -106,7 +106,7 @@ class ReportService:
                 report_id=report.id,
                 event="Created",
                 timestamp=now_iso,
-                actor=incident.assigned_analyst,
+                actor=actor_id,
                 notes="Initial DFIR 15-section report compilation",
             )
 
@@ -176,7 +176,7 @@ class ReportService:
                 report_id=report.id,
                 event="Revision Created",
                 timestamp=now_iso,
-                actor="Alex Mercer",
+                actor=actor_id,
                 notes=revision_reason,
             )
 

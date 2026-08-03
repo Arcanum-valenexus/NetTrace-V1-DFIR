@@ -2,14 +2,21 @@ from typing import Any, Dict
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import verify_password, get_password_hash, create_access_token, create_refresh_token
+from app.core.security import (
+    verify_password,
+    get_password_hash,
+    create_access_token,
+    create_refresh_token,
+    decode_refresh_token,
+    get_permissions_for_role,
+)
 from app.repositories.users_repository import UsersRepository
 from app.repositories.audit_repository import AuditRepository
 from app.schemas.auth import LoginRequest, UserRegisterRequest, AuthTokenResponse
 
 
 class AuthService:
-    """Service handling User Registration, Authentication, Password Verification, and Token Issuance."""
+    """Service handling User Registration, Authentication, Password Verification, Token Issuance, Refreshing, and Logout."""
 
     def __init__(self, session: AsyncSession):
         self.session = session
@@ -71,7 +78,7 @@ class AuthService:
                 subject=user.id,
                 email=user.email,
                 role=user.role,
-                permissions=["cases:read", "cases:write", "incidents:read", "incidents:write", "evidence:upload", "pcap:analyze", "reports:generate"],
+                permissions=get_permissions_for_role(user.role),
             )
             refresh_token = create_refresh_token(subject=user.id)
 
@@ -100,3 +107,56 @@ class AuthService:
                 token_type="Bearer",
                 expires_in=3600,
             )
+
+    async def refresh_access_token(self, refresh_token: str) -> AuthTokenResponse:
+        """Validates refresh token and issues a new access token and refresh token pair."""
+        token_data = decode_refresh_token(refresh_token)
+        if not token_data or not token_data.sub:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired refresh token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        async with self.session.begin():
+            user = await self.users_repo.get_by_id(token_data.sub)
+            if not user:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="User account associated with token no longer exists",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+
+            new_access_token = create_access_token(
+                subject=user.id,
+                email=user.email,
+                role=user.role,
+                permissions=get_permissions_for_role(user.role),
+            )
+            new_refresh_token = create_refresh_token(subject=user.id)
+
+            await self.audit_repo.log_event(
+                event_type="TOKEN_REFRESH",
+                actor_id=user.id,
+                action="REFRESH_SUCCESS",
+                details={"email": user.email, "role": user.role},
+            )
+
+            return AuthTokenResponse(
+                access_token=new_access_token,
+                refresh_token=new_refresh_token,
+                token_type="Bearer",
+                expires_in=3600,
+            )
+
+    async def logout_user(self, user_id: str) -> None:
+        """Revokes user active sessions and logs logout audit event."""
+        async with self.session.begin():
+            await self.users_repo.revoke_all_sessions(user_id)
+            await self.audit_repo.log_event(
+                event_type="USER_LOGOUT",
+                actor_id=user_id,
+                action="LOGOUT_SUCCESS",
+                details={"user_id": user_id},
+            )
+

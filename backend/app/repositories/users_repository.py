@@ -47,6 +47,13 @@ class UsersRepository(BaseRepository[UserModel]):
             return True
         return False
 
+    async def revoke_all_sessions(self, user_id: str) -> None:
+        """Deactivate or revoke all active sessions for a user."""
+        sessions = await self.list_user_sessions(user_id)
+        for session_obj in sessions:
+            session_obj.is_current = False
+        await self.session.flush()
+
     async def create_activity_log(self, **activity_data) -> UserActivityModel:
         """Log user activity event."""
         activity = UserActivityModel(**activity_data)

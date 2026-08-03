@@ -4,7 +4,7 @@ from app.schemas.base import BaseSchema
 
 class ReportGenerateRequestSchema(BaseSchema):
     incident_id: str
-    case_id: Optional[str] = "CASE-2026-001"
+    case_id: Optional[str] = None
     include_pdf: Optional[bool] = True
 
 

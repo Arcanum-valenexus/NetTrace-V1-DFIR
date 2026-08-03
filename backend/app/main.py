@@ -3,11 +3,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.core.database import Base, async_engine
 from app.core.logging import setup_logging, logger
 from app.middleware.logging_middleware import RequestLoggingMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.middleware.exception_handler import register_exception_handlers
 from app.api.v1.router import api_v1_router
+import app.models  # noqa: F401  # Ensure model classes are registered with SQLAlchemy metadata before creating schema
 
 
 @asynccontextmanager
@@ -19,6 +21,12 @@ async def lifespan(app: FastAPI):
         environment=settings.ENVIRONMENT,
         version="1.0.0",
     )
+
+    if settings.ENVIRONMENT == "development":
+        async with async_engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+            logger.info("Database schema ensured for development environment")
+
     yield
     logger.info("Shutting down NetTrace Enterprise Backend Engine")
 
