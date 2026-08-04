@@ -25,19 +25,23 @@ NetRace is a Python-powered Network Forensics and Incident Reconstruction platfo
 ## 🖥️ Dashboard Preview
 
 ### Command Center
-![Command Center](assets/screenshots/command-center.png)
+<img width="1240" height="1654" alt="Screenshot_5-8-2026_0532_nettrace ai studio" src="https://github.com/user-attachments/assets/cc6ca849-c455-4f55-b8f2-afd7fa40022d" />
+
 
 ### Packet Analyzer
-![Packet Analyzer](assets/screenshots/packet-analyzer.png)
+<img width="1240" height="1513" alt="Screenshot_5-8-2026_02550_nettrace ai studio" src="https://github.com/user-attachments/assets/f7eabf57-a703-4c1c-a82a-850b64eb2578" />
+
 
 ### IOC Detection
-![IOC Detection](assets/screenshots/ioc-detection.png)
+<img width="1240" height="1223" alt="Screenshot_5-8-2026_02751_nettrace ai studio" src="https://github.com/user-attachments/assets/cfd73e0d-2b7f-441c-a13d-b2830a50d005" />
 
 ### Evidence Vault
-![Evidence Vault](assets/screenshots/evidence-vault.png)
+<img width="1240" height="1451" alt="Screenshot_5-8-2026_0287_nettrace ai studio" src="https://github.com/user-attachments/assets/f7227347-9ed8-491b-abd8-b3d06fc8bb66" />
+
 
 ### Investigation Report
-![Investigation Report](assets/screenshots/report.png)
+<img width="1240" height="4641" alt="Screenshot_5-8-2026_02820_nettrace ai studio" src="https://github.com/user-attachments/assets/e506e1d7-7a03-4e41-8e73-0f7a046964e7" />
+
 
 ---
 
