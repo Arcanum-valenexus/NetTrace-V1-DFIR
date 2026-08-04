@@ -61,7 +61,6 @@ NetRace is a Python-powered Network Forensics and Incident Reconstruction platfo
 - MongoDB
 
 ---
-
 ## 🔄 NetRace Analysis Workflow
 
 ```mermaid
@@ -85,7 +84,8 @@ flowchart TD
     K --> L[📁 Evidence Collection & Hash Verification]
     L --> M[📊 Interactive Dashboard]
     M --> N[📑 Generate Forensic Report]
----
+```
+
 
 ## 📊 Dashboard Modules
 
