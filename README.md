@@ -1,40 +1,62 @@
-<div align="center">
-  <!-- You can keep the AI Studio banner or replace it with your app's logo/banner -->
-  <img src="your-banner-image-url-here" alt="NetTrace Banner" width="100%">
+# 🚀 NetRace - Network Forensics & Incident Reconstruction Platform
 
-  <h1>🌐 NetTrace</h1>
-  
-  <p>
-    <strong>[A catchy, one-sentence tagline about what NetTrace does. E.g., An AI-powered network analysis tool.]</strong>
-  </p>
+> **Trace Every Packet. Reveal Every Attack.**
 
-  <!-- Replace with relevant badges -->
-  <img src="[https://img.shields.io/badge/Node.js-43853D?style=for-the-badge&logo=node.js&logoColor=white](https://img.shields.io/badge/Node.js-43853D?style=for-the-badge&logo=node.js&logoColor=white)" />
-  <img src="[https://img.shields.io/badge/Gemini_AI-8E75B2?style=for-the-badge&logo=google&logoColor=white](https://img.shields.io/badge/Gemini_AI-8E75B2?style=for-the-badge&logo=google&logoColor=white)" />
-</div>
+NetRace is a Python-powered Network Forensics and Incident Reconstruction platform that analyzes **PCAP (Packet Capture)** files to help cybersecurity professionals investigate network incidents. It extracts network metadata, detects Indicators of Compromise (IOCs), reconstructs attack timelines, and presents the results through an interactive web dashboard.
 
-<hr />
+## ✨ Features
 
-## 📖 About The Project
+- 📂 Upload PCAP files for analysis
+- 🔍 Deep Packet Inspection (DPI)
+- 🌐 Protocol analysis (TCP, UDP, HTTP, DNS, TLS, ICMP)
+- 📊 Interactive network traffic dashboard
+- 🚨 IOC (Indicators of Compromise) detection
+- 📈 Traffic statistics and protocol distribution
+- ⏱️ Attack timeline reconstruction
+- 📁 Evidence Vault with SHA-256 verification
+- 📑 Automated forensic reports
+- 🗂️ Investigation case management
+- ⚡ Fast and intuitive interface
 
-[Write a brief 1-2 paragraph description of NetTrace. What is its main purpose? Who is it for? How does it leverage the Gemini API?]
+## 🛠️ Tech Stack
 
-### ✨ Features
-*   **Feature 1:** [Brief description]
-*   **Feature 2:** [Brief description]
-*   **Feature 3:** [Brief description]
+### Frontend
+- React.js
+- TypeScript
+- Tailwind CSS
 
-## 🚀 Getting Started
+### Backend
+- Python
+- FastAPI *(or Flask, if you're using Flask)*
 
-View the app directly in AI Studio: [NetTrace on AI Studio](https://ai.studio/apps/...)
+### Packet Analysis
+- PyShark
+- Scapy
+- TShark (Wireshark Engine)
 
-### Prerequisites
-Make sure you have the following installed:
-*   [Node.js](https://nodejs.org/) (v16 or higher recommended)
-*   A valid [Gemini API Key](https://aistudio.google.com/app/apikey)
+### Database
+- MongoDB
 
-### Local Installation
+## 🔍 Analysis Workflow
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/your-username/NetTrace-v1-frontend-stable.git
+1. Upload a PCAP file.
+2. Parse packets using Python.
+3. Extract protocols, IP addresses, ports, DNS, HTTP, and TLS data.
+4. Detect suspicious activities and IOCs.
+5. Reconstruct the incident timeline.
+6. Store investigation evidence.
+7. Display results in the NetRace dashboard.
+8. Generate a forensic investigation report.
+
+## 🎯 Target Users
+
+- Digital Forensics Investigators
+- SOC Analysts
+- Incident Responders
+- Malware Analysts
+- Security Researchers
+- Cybersecurity Students
+
+---
+
+⭐ **If you found this project useful, please consider giving it a star on GitHub!**
