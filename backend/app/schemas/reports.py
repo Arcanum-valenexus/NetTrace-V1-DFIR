@@ -37,7 +37,7 @@ class ForensicsReportResponse(BaseSchema):
     attackTimeline: List[Dict[str, Any]] = []
     evidenceInventory: List[Dict[str, Any]] = []
     packetAnalysis: Dict[str, Any] = {}
-    iocs: List[Dict[str, Any]] = []
+    iocs: Any = []
     rootCauseAnalysis: Dict[str, Any] = {}
     containmentAndRecovery: Dict[str, Any] = {}
     remediationRecommendations: List[str] = []

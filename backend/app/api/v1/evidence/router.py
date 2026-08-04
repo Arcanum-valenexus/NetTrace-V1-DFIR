@@ -43,6 +43,13 @@ async def list_evidence(
             uploadedAt=a.uploaded_at,
             uploadedBy=a.uploaded_by,
             storagePath=a.storage_path,
+            analysisStatus=a.analysis_status,
+            analysisEngine=a.analysis_engine,
+            packetCount=a.packet_count,
+            captureDuration=a.capture_duration,
+            topProtocols=a.top_protocols or [],
+            analysisSummary=a.analysis_summary or {},
+            analysisCompletedAt=a.analysis_completed_at,
             chainOfCustody=[
                 ChainOfCustodyEntrySchema(
                     id=c.id,
@@ -140,6 +147,13 @@ async def upload_evidence(
             uploadedAt=full_artifact.uploaded_at,
             uploadedBy=full_artifact.uploaded_by,
             storagePath=full_artifact.storage_path,
+            analysisStatus=full_artifact.analysis_status,
+            analysisEngine=full_artifact.analysis_engine,
+            packetCount=full_artifact.packet_count,
+            captureDuration=full_artifact.capture_duration,
+            topProtocols=full_artifact.top_protocols or [],
+            analysisSummary=full_artifact.analysis_summary or {},
+            analysisCompletedAt=full_artifact.analysis_completed_at,
             chainOfCustody=[
                 ChainOfCustodyEntrySchema(
                     id=c.id,

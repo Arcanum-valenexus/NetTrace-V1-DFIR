@@ -20,6 +20,17 @@ async def get_metrics(
     return ResponseEnvelope(success=True, data=metrics)
 
 
+@router.get("/pcap-stats", response_model=ResponseEnvelope[dict], summary="Get Live PCAP Forensic Operational Metrics")
+async def get_pcap_stats(
+    token_data: TokenData = Depends(get_current_user_token),
+    db: AsyncSession = Depends(get_db)
+):
+    """Queries live PCAP forensic sessions, total packet counts, top protocols, top talkers, and size statistics."""
+    dashboard_service = DashboardService(db)
+    stats = await dashboard_service.get_pcap_metrics()
+    return ResponseEnvelope(success=True, data=stats)
+
+
 @router.get("/kill-chain", response_model=ResponseEnvelope[dict], summary="Get Kill Chain Distribution")
 async def get_kill_chain(
     token_data: TokenData = Depends(get_current_user_token),

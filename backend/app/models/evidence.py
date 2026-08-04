@@ -22,6 +22,13 @@ class EvidenceArtifactModel(Base, BaseModelMixin, SoftDeleteMixin):
     owner_investigator_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     access_password: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     storage_path: Mapped[str] = mapped_column(Text, nullable=False)
+    analysis_status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    analysis_engine: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    packet_count: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    capture_duration: Mapped[Optional[float]] = mapped_column(Text, nullable=True) # or Float
+    top_protocols: Mapped[Optional[list]] = mapped_column(JSON, default=list)
+    analysis_summary: Mapped[Optional[dict]] = mapped_column(JSON, default=dict)
+    analysis_completed_at: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     chain_of_custody: Mapped[List["ChainOfCustodyModel"]] = relationship("ChainOfCustodyModel", back_populates="evidence", cascade="all, delete-orphan")
 

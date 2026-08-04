@@ -28,4 +28,12 @@ class EvidenceArtifactResponse(BaseSchema):
     ownerInvestigatorId: Optional[str] = None
     ownerInvestigatorName: Optional[str] = None
     storagePath: str
+    analysisStatus: Optional[str] = None
+    analysisEngine: Optional[str] = None
+    packetCount: Optional[int] = None
+    captureDuration: Optional[float] = None
+    topProtocols: List[dict] = []
+    analysisSummary: dict = {}
+    analysisCompletedAt: Optional[str] = None
+    iocCount: int = 0
     chainOfCustody: List[ChainOfCustodyEntrySchema] = []

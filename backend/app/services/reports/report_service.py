@@ -32,6 +32,67 @@ class ReportService:
             report_no = f"REP-2026-{uuid.uuid4().hex[:4].upper()}"
             now_iso = datetime.now(timezone.utc).isoformat()
 
+            from app.repositories.pcap_repository import PcapRepository
+            pcap_repo = PcapRepository(self.session)
+            pcap_sessions = await pcap_repo.list_sessions(limit=100)
+            target_session = None
+            if pcap_sessions:
+                # Pick the most recent session
+                target_session = pcap_sessions[-1]
+
+            packet_analysis_data = {
+                "pcapFilename": target_session.filename if target_session else "capture.pcap",
+                "analysisEngine": target_session.analysis_engine if target_session else "PyShark & Scapy Engine",
+                "totalPacketsParsed": target_session.packet_count if target_session else 0,
+                "captureDurationSeconds": target_session.duration_seconds if target_session else 0.0,
+                "topProtocols": target_session.top_protocols if target_session else [],
+                "packetStatistics": target_session.analysis_summary.get("packet_size_stats") if (target_session and target_session.analysis_summary) else {},
+                "topTalkers": target_session.analysis_summary.get("top_talkers") if (target_session and target_session.analysis_summary) else [],
+                "evidenceReference": target_session.evidence_id if target_session else None,
+                "analysisTimestamp": target_session.upload_time if target_session else now_iso,
+                "status": target_session.status if target_session else "Completed",
+            }
+
+            from app.repositories.ioc_repository import IOCRepository
+            ioc_repo = IOCRepository(self.session)
+            all_iocs = await ioc_repo.list_iocs(limit=1000)
+
+            suspicious_ips = [i.value for i in all_iocs if i.type in ("IPv4", "IPv6")]
+            suspicious_domains = [i.value for i in all_iocs if i.type == "Domain"]
+            suspicious_hashes = [i.value for i in all_iocs if i.type in ("MD5", "SHA1", "SHA256")]
+
+            sev_dist = {
+                "Critical": len([i for i in all_iocs if i.severity == "Critical"]),
+                "High": len([i for i in all_iocs if i.severity == "High"]),
+                "Medium": len([i for i in all_iocs if i.severity == "Medium"]),
+                "Low": len([i for i in all_iocs if i.severity == "Low"]),
+            }
+
+            ioc_report_data = {
+                "summary": f"Identified {len(all_iocs)} total Indicators of Compromise from forensic network capture telemetry.",
+                "iocCount": len(all_iocs),
+                "severityDistribution": sev_dist,
+                "affectedEvidence": list(set([i.evidence_id for i in all_iocs if i.evidence_id])),
+                "affectedSessions": list(set([i.source_session for i in all_iocs if i.source_session])),
+                "affectedIncidents": list(set([i.incident_id for i in all_iocs if i.incident_id])),
+                "topIocTypes": list(set([i.type for i in all_iocs])),
+                "suspiciousDomains": suspicious_domains[:10],
+                "suspiciousIps": suspicious_ips[:10],
+                "hashes": suspicious_hashes[:10],
+                "items": [
+                    {
+                        "id": i.id,
+                        "type": i.type,
+                        "value": i.value,
+                        "status": i.status,
+                        "severity": i.severity,
+                        "category": i.category,
+                        "firstSeen": i.first_seen,
+                    }
+                    for i in all_iocs[:20]
+                ]
+            }
+
             sections = {
                 "coverPage": {
                     "title": f"Forensics Report: {incident.title}",
@@ -54,17 +115,8 @@ class ReportService:
                 },
                 "attackTimeline": [{"timestamp": t.timestamp, "source": t.source, "eventType": t.event_type, "description": t.description} for t in incident.timeline_events],
                 "evidenceInventory": [],
-                "packetAnalysis": {
-                    "pcapFilename": "capture.pcap",
-                    "analysisEngine": "PyShark 0.6.0 & Scapy 2.7.0",
-                    "totalPacketsParsed": 2400,
-                    "captureDurationSeconds": 300,
-                    "topProtocols": ["TCP (72%)", "HTTP (18%)", "DNS (10%)"],
-                    "maliciousFlowsCount": 3,
-                    "dpiAnomalySummary": "Reverse shell TCP beaconing detected.",
-                    "c2TrafficDetails": "Beaconing to 185.220.101.5 over port 443",
-                },
-                "iocs": [],
+                "packetAnalysis": packet_analysis_data,
+                "iocs": ioc_report_data,
                 "rootCauseAnalysis": {
                     "primaryVector": incident.attack_vector or "Initial Access",
                     "exploitedVulnerabilities": "NTLM Relay Exploitation",
