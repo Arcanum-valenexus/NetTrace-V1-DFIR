@@ -111,7 +111,7 @@ export const IncidentWorkbench: React.FC = () => {
   );
   
   const incidentIocs = iocs.slice(0, 4);
-  const incidentEvidence = evidence.filter(e => e.incidentId === selectedIncident.id || e.incidentId === 'inc-1');
+  const incidentEvidence = evidence.filter(e => e.incidentId === selectedIncident.id);
   const incidentReport = reports.find(r => r.incidentId === selectedIncident.id);
 
   return (

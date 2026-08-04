@@ -109,7 +109,8 @@ export const ForensicsReportGenerator: React.FC = () => {
     pcapSession,
     setActiveTab,
     moduleStatuses,
-    isAllModulesCompleted
+    isAllModulesCompleted,
+    cases
   } = useInvestigation();
 
   const [selectedReportId, setSelectedReportId] = useState<string>(reports[0]?.id || '');
@@ -357,7 +358,7 @@ export const ForensicsReportGenerator: React.FC = () => {
     return `# NETTRACE DFIR INCIDENT REPORT: ${activeReport.incidentTitle}
 **Report Number:** ${activeReport.reportNumber || activeReport.id.toUpperCase()}
 **Version:** v${activeReport.version || 1}.0
-**Case ID:** ${activeReport.caseId || 'CASE-2026-001'}
+**Case ID:** ${activeReport.caseId || cases[0]?.caseNumber || cases[0]?.id || ''}
 **Generated Date:** ${activeReport.generatedAt}
 **Lead Investigator:** ${author}
 **Organization:** ${org}
@@ -377,7 +378,7 @@ ${activeReport.revisionReason ? `**Revision Reason:** ${activeReport.revisionRea
 ${activeReport.executiveSummary}
 
 ## 3. INCIDENT CASE DETAILS
-- Case ID: ${activeReport.caseId || 'CASE-2026-001'}
+- Case ID: ${activeReport.caseId || cases[0]?.caseNumber || cases[0]?.id || ''}
 - Category: ${activeReport.incidentCaseDetails?.category || 'Ransomware / Lateral Movement'}
 - Severity: ${activeReport.incidentCaseDetails?.severity || 'Critical'}
 - Current Incident Stage: ${activeReport.incidentCaseDetails?.currentStage || 'Containment'}
@@ -996,7 +997,7 @@ ${activeReport.appendix || 'Adheres to NIST SP 800-61 Rev 2 guidelines.'}
                 </div>
                 <div>
                   <span className="text-slate-500 block text-[10px]">Case ID:</span>
-                  <span className="text-slate-300 font-mono font-bold">{activeReport.caseId || 'CASE-2026-001'}</span>
+                  <span className="text-slate-300 font-mono font-bold">{activeReport.caseId || cases[0]?.caseNumber || cases[0]?.id || ''}</span>
                 </div>
                 <div>
                   <span className="text-slate-500 block text-[10px]">Generated Timestamp:</span>
@@ -1397,7 +1398,7 @@ ${activeReport.appendix || 'Adheres to NIST SP 800-61 Rev 2 guidelines.'}
                         <td className="p-2.5 font-mono text-cyan-300">31 Jul 2026 15:00 UTC</td>
                         <td className="p-2.5 font-mono font-bold text-slate-200">DC01_lsass_memory_dump.dmp</td>
                         <td className="p-2.5 font-bold text-slate-300">Evidence Verified</td>
-                        <td className="p-2.5 text-slate-400">{userProfile.fullName || 'Alex Mercer'}</td>
+                        <td className="p-2.5 text-slate-400">{userProfile.fullName || 'Lead DFIR Analyst'}</td>
                         <td className="p-2.5 text-slate-400 text-[10px]">Hash baseline verified at acquire.</td>
                       </tr>
                     )}
@@ -1568,7 +1569,7 @@ ${activeReport.appendix || 'Adheres to NIST SP 800-61 Rev 2 guidelines.'}
                 <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
                   <span className="text-slate-500 text-[10px] block uppercase font-mono">Report ID / Case ID</span>
                   <span className="text-slate-200 font-bold font-mono text-xs truncate block">
-                    {activeReport.reportNumber || activeReport.id} / {activeReport.caseId || 'CASE-2026-001'}
+                    {activeReport.reportNumber || activeReport.id} / {activeReport.caseId || cases[0]?.caseNumber || cases[0]?.id || ''}
                   </span>
                 </div>
 

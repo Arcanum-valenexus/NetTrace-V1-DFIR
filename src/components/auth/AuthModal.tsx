@@ -32,12 +32,7 @@ export const AuthModal: React.FC = () => {
   const [emailError, setEmailError] = useState<string>('');
   const [passwordError, setPasswordError] = useState<string>('');
 
-  // Predefined Mock Credentials for Development Mode
-  const MOCK_CREDENTIALS = [
-    { email: 'admin@nettrace.local', password: 'NetTrace@123' },
-    { email: 'alex.mercer@nettrace.sec', password: 'NetTrace@2026' },
-    { email: 'analyst@nettrace.io', password: 'NetTrace@2026' },
-  ];
+
 
   // Validate Email Regex
   const validateEmail = (emailStr: string) => {
@@ -61,7 +56,7 @@ export const AuthModal: React.FC = () => {
     } else if (!validateEmail(trimmedEmail)) {
       // 2. Email format is valid
       setEmailError('Invalid email format.');
-      setErrorMsg('Invalid Email Address format. Please use a valid email (e.g. admin@nettrace.local).');
+      setErrorMsg('Invalid Email Address format. Please enter a valid email address.');
       hasValidationError = true;
     }
 
@@ -77,81 +72,24 @@ export const AuthModal: React.FC = () => {
       hasValidationError = true;
     }
 
-    if (hasValidationError) return;
-
     setIsAuthenticating(true);
 
-    // Simulate FastAPI + Supabase Authentication API Call
-    setTimeout(() => {
-      // Check registered accounts from localStorage
-      let registeredUsers: Array<{ email: string; password?: string }> = [];
+    (async () => {
       try {
-        const saved = localStorage.getItem('nettrace_registered_users');
-        if (saved) registeredUsers = JSON.parse(saved);
-      } catch {
-        // ignore
-      }
-
-      const matchedMock = MOCK_CREDENTIALS.find(
-        c => c.email.toLowerCase() === trimmedEmail.toLowerCase() && c.password === password
-      );
-      const matchedReg = registeredUsers.find(
-        u => u.email.toLowerCase() === trimmedEmail.toLowerCase() && (!u.password || u.password === password)
-      );
-
-      const isValidUser = Boolean(matchedMock || matchedReg);
-
-      if (!isValidUser) {
+        await loginUser(trimmedEmail, password);
         setIsAuthenticating(false);
-        setErrorMsg('Incorrect email or password. Authentication failed.');
+        showToast(
+          `Login Successful! Authenticated as ${trimmedEmail}${rememberDevice ? ' (Trusted Device Saved)' : ''}`, 
+          'success'
+        );
+      } catch (err: any) {
+        setIsAuthenticating(false);
+        const errDetail = err?.message || 'Incorrect email or password. Authentication failed.';
+        setErrorMsg(errDetail);
         setEmailError('Invalid credentials');
         setPasswordError('Invalid credentials');
-        return;
       }
-
-      // Handle 2FA Verification Check (Triggered if email contains 2fa or when 2FA active)
-      if (trimmedEmail.includes('2fa') && !requires2FA) {
-        setIsAuthenticating(false);
-        setRequires2FA(true);
-        showToast('Two-Factor Authentication Required. Security code dispatched.', 'info');
-        return;
-      }
-
-      if (requires2FA && twoFactorCode.length < 6) {
-        setIsAuthenticating(false);
-        setErrorMsg('Please enter a valid 6-digit 2FA / TOTP Security Code.');
-        return;
-      }
-
-      // If Remember this device is enabled, establish persistent trusted device session metadata
-      if (rememberDevice) {
-        try {
-          const deviceSession = {
-            trustedDevice: true,
-            userEmail: trimmedEmail,
-            deviceId: `dev_${Math.random().toString(36).substring(2, 11)}`,
-            issuedAt: new Date().toISOString(),
-            expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-          };
-          localStorage.setItem('nettrace_trusted_device', JSON.stringify(deviceSession));
-        } catch {
-          // ignore storage access errors
-        }
-      } else {
-        try {
-          localStorage.removeItem('nettrace_trusted_device');
-        } catch {
-          // ignore
-        }
-      }
-
-      setIsAuthenticating(false);
-      showToast(
-        `Login Successful! Authenticated as ${trimmedEmail}${rememberDevice ? ' (Trusted Device Saved)' : ''}`, 
-        'success'
-      );
-      loginUser(trimmedEmail);
-    }, 800);
+    })();
   };
 
   const handleRegisterSubmit = (e: React.FormEvent) => {
@@ -176,19 +114,17 @@ export const AuthModal: React.FC = () => {
     }
 
     setIsAuthenticating(true);
-    setTimeout(() => {
-      setIsAuthenticating(false);
+    (async () => {
       try {
-        const saved = localStorage.getItem('nettrace_registered_users');
-        const existing = saved ? JSON.parse(saved) : [];
-        existing.push({ email: email.trim(), password, name: fullName.trim() });
-        localStorage.setItem('nettrace_registered_users', JSON.stringify(existing));
-      } catch {
-        // ignore
+        await registerUser(fullName.trim(), email.trim(), password);
+        setIsAuthenticating(false);
+        showToast('Account registered successfully. Welcome to NetTrace!', 'success');
+      } catch (err: any) {
+        setIsAuthenticating(false);
+        const errDetail = err?.message || 'Registration failed. Please try again.';
+        setErrorMsg(errDetail);
       }
-      registerUser(fullName.trim(), email.trim());
-      showToast('Account registered successfully. Welcome to NetTrace!', 'success');
-    }, 800);
+    })();
   };
 
   const handleForgotSubmit = (e: React.FormEvent) => {
@@ -282,7 +218,7 @@ export const AuthModal: React.FC = () => {
                             ? 'bg-red-950/20 border border-red-500/80 text-red-100 placeholder-red-300/50 focus:border-red-400' 
                             : 'bg-slate-950 border border-slate-800 text-slate-100 focus:border-cyan-500'
                         }`}
-                        placeholder="admin@nettrace.local"
+                        placeholder="analyst@organization.com"
                       />
                     </div>
                     {emailError && (
@@ -363,17 +299,7 @@ export const AuthModal: React.FC = () => {
                     </span>
                   </div>
 
-                  {/* Development Mode Authorized Credentials Reference */}
-                  <div className="p-3 bg-slate-950/90 border border-slate-800/80 rounded-xl text-[11px] font-sans text-slate-400 space-y-1">
-                    <div className="flex items-center justify-between text-slate-300 font-bold">
-                      <span>Authorized Test Credentials</span>
-                      <span className="text-[10px] text-cyan-400 bg-cyan-950/80 px-1.5 py-0.5 rounded border border-cyan-800/50 font-mono-code">Dev Mode</span>
-                    </div>
-                    <div className="flex items-center justify-between text-slate-400 font-mono-code text-[10.5px]">
-                      <span>Email: <strong className="text-cyan-300 font-normal">admin@nettrace.local</strong></span>
-                      <span>Pass: <strong className="text-cyan-300 font-normal">NetTrace@123</strong></span>
-                    </div>
-                  </div>
+
                 </>
               ) : (
                 /* 2FA Code Verification State */
@@ -466,7 +392,7 @@ export const AuthModal: React.FC = () => {
                     onChange={(e) => setFullName(e.target.value)}
                     required
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 pl-10 pr-3 text-xs text-slate-100 focus:outline-none focus:border-cyan-500 font-sans"
-                    placeholder="Alex Mercer"
+                    placeholder="Jane Doe"
                   />
                 </div>
               </div>

@@ -4,21 +4,31 @@ import { useInvestigation } from '../../context/InvestigationContext';
 import { SeverityLevel, IncidentCategory, KillChainStage } from '../../types';
 
 export const NewIncidentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
-  const { addNewIncident, setActiveTab } = useInvestigation();
+  const { addNewIncident, createCase, setActiveTab, userProfile } = useInvestigation();
 
   const [title, setTitle] = useState<string>('');
   const [category, setCategory] = useState<IncidentCategory>('Ransomware');
   const [severity, setSeverity] = useState<SeverityLevel>('High');
-  const [assignedAnalyst, setAssignedAnalyst] = useState<string>('Alex Mercer');
+  const [assignedAnalyst, setAssignedAnalyst] = useState<string>(userProfile.fullName || 'Lead DFIR Analyst');
   const [summary, setSummary] = useState<string>('');
   const [attackVector, setAttackVector] = useState<string>('Phishing Email -> Powershell Exec');
   const [currentStage, setCurrentStage] = useState<KillChainStage>('Execution');
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title || !summary) return;
+
+    try {
+      await createCase({
+        title,
+        description: summary,
+        priority: severity
+      });
+    } catch {
+      // handled in context toast
+    }
 
     addNewIncident({
       title,

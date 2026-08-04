@@ -33,13 +33,18 @@ export const EvidenceLocker: React.FC = () => {
   const { 
     evidence, 
     addEvidenceArtifact, 
+    uploadEvidenceFile,
     updateEvidenceMetadata, 
     deleteEvidenceArtifact,
     addChainOfCustodyEntry, 
     setActiveTab, 
     showToast,
-    userProfile
+    userProfile,
+    cases,
+    selectedIncident
   } = useInvestigation();
+
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   // Selected Artifact state
   const [selectedArtifactId, setSelectedArtifactId] = useState<string>(evidence[0]?.id || '');
@@ -72,7 +77,7 @@ export const EvidenceLocker: React.FC = () => {
   // Register Form state
   const [regName, setRegName] = useState<string>('');
   const [regCategory, setRegCategory] = useState<EvidenceCategory>('Memory Dump');
-  const [regCaseId, setRegCaseId] = useState<string>('CASE-2026-001');
+  const [regCaseId, setRegCaseId] = useState<string>(cases[0]?.caseNumber || cases[0]?.id || '');
   const [regDescription, setRegDescription] = useState<string>('');
   const [regTags, setRegTags] = useState<string>('');
   const [regPassword, setRegPassword] = useState<string>('');
@@ -99,48 +104,41 @@ export const EvidenceLocker: React.FC = () => {
   });
 
   // Handle Register Evidence Submission
-  const handleCreateEvidence = (e: React.FormEvent) => {
+  const handleCreateEvidence = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!regName.trim()) {
       showToast('Please enter an Evidence Name', 'error');
       return;
     }
-    if (!regPassword.trim()) {
-      showToast('Evidence Password is required during registration', 'error');
-      return;
+
+    try {
+      const fileToUpload = selectedFile || new File(
+        [new TextEncoder().encode(`NETTRACE DIGITAL EVIDENCE\nName: ${regName}\nCategory: ${regCategory}\nCase: ${regCaseId}`)],
+        regName.trim(),
+        { type: 'application/octet-stream' }
+      );
+
+      await uploadEvidenceFile(
+        fileToUpload,
+        regCategory,
+        regCaseId.trim() || cases[0]?.id || '',
+        selectedIncident?.id || '',
+        regDescription.trim() || 'Forensic artifact registered into vault.'
+      );
+
+      showToast(`Uploaded evidence artifact "${regName.trim()}" with real SHA256 & MD5 hashes`, 'success');
+      
+      // Reset form
+      setRegName('');
+      setRegDescription('');
+      setRegTags('');
+      setRegPassword('');
+      setRegFileSimulated('');
+      setSelectedFile(null);
+      setShowAddModal(false);
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to upload evidence artifact to backend', 'error');
     }
-
-    const fakeHash = Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
-    const fakeMd5 = Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
-
-    const tagArray = regTags.split(',').map(t => t.trim()).filter(Boolean);
-
-    addEvidenceArtifact({
-      caseId: regCaseId.trim() || 'CASE-2026-001',
-      incidentId: 'inc-1',
-      name: regName.trim(),
-      category: regCategory,
-      description: regDescription.trim() || 'Evidence artifact registered into forensic repository.',
-      tags: tagArray.length > 0 ? tagArray : ['Forensic Evidence'],
-      accessPassword: regPassword.trim(),
-      sizeBytes: regSize,
-      hashSha256: fakeHash,
-      hashMd5: fakeMd5,
-      uploadedBy: userProfile.fullName || 'Alex Mercer',
-      ownerInvestigatorId: 'inv-001',
-      ownerInvestigatorName: userProfile.fullName || 'Alex Mercer',
-      storagePath: `/vault/2026/${regCaseId.trim() || 'CASE-2026-001'}/${regName.trim()}`
-    });
-
-    showToast(`Registered evidence artifact "${regName.trim()}" with locked baseline`, 'success');
-    
-    // Reset form
-    setRegName('');
-    setRegDescription('');
-    setRegTags('');
-    setRegPassword('');
-    setRegFileSimulated('');
-    setShowAddModal(false);
   };
 
   // Request Protected Action (Edit / Delete) -> Trigger Password Modal
@@ -214,7 +212,7 @@ export const EvidenceLocker: React.FC = () => {
       activeArtifact.id, 
       cocAction || 'Custody Event Recorded', 
       cocNotes.trim(),
-      userProfile.fullName || 'Alex Mercer'
+      userProfile.fullName || 'Lead DFIR Analyst'
     );
 
     showToast('Custody Event Added Successfully', 'success');
@@ -676,7 +674,7 @@ This file represents verified digital forensic evidence extracted in NetTrace V1
                       <input
                         type="text"
                         disabled
-                        value={`${userProfile.fullName || 'Alex Mercer'} (Logged in)`}
+                        value={`${userProfile.fullName || 'Lead DFIR Analyst'} (Logged in)`}
                         className="w-full bg-slate-900/60 border border-slate-800 rounded-lg p-2 text-xs text-slate-400 cursor-not-allowed"
                       />
                     </div>
@@ -1261,7 +1259,7 @@ This file represents verified digital forensic evidence extracted in NetTrace V1
                     activeArtifact.id, 
                     'Evidence Verified', 
                     'SHA-256 hash verified against acquisition baseline.', 
-                    userProfile.fullName || 'Alex Mercer'
+                    userProfile.fullName || 'Lead DFIR Analyst'
                   );
                   setShowVerifyModal(false);
                   showToast('Custody Event Added Successfully', 'success');

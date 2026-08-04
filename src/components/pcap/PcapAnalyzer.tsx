@@ -51,11 +51,14 @@ export const PcapAnalyzer: React.FC = () => {
     pcapFilter, 
     setPcapFilter,
     uploadCustomPcap,
+    uploadRealPcapFile,
     addEvidenceArtifact,
     showToast,
     iocs,
     reports,
-    evidence
+    evidence,
+    selectedIncident,
+    incidents
   } = useInvestigation();
 
   const [dragActive, setDragActive] = useState<boolean>(false);
@@ -74,27 +77,33 @@ export const PcapAnalyzer: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      uploadCustomPcap(file.name, 32);
-      showToast(`Uploaded PCAP file "${file.name}" successfully`, 'success');
+      try {
+        await uploadRealPcapFile(file);
+      } catch {
+        uploadCustomPcap(file.name, 32);
+      }
     }
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     setDragActive(false);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const file = e.dataTransfer.files[0];
-      uploadCustomPcap(file.name, 32);
-      showToast(`Uploaded PCAP file "${file.name}" successfully`, 'success');
+      try {
+        await uploadRealPcapFile(file);
+      } catch {
+        uploadCustomPcap(file.name, 32);
+      }
     }
   };
 
   const handleSaveToEvidence = (file: typeof pcapSession.extractedFiles[0]) => {
     addEvidenceArtifact({
-      incidentId: 'inc-1',
+      incidentId: selectedIncident?.id || incidents[0]?.id || '',
       name: file.filename,
       category: 'Malware Binary',
       sizeBytes: file.sizeBytes,
@@ -109,16 +118,16 @@ export const PcapAnalyzer: React.FC = () => {
   };
 
   // Filter packets by IP, Port, Protocol, DNS, HTTP Host, TCP Flags, Keyword Search
-  const filteredPackets = pcapSession.packets.filter(pkt => {
+  const filteredPackets = (pcapSession?.packets || []).filter(pkt => {
     if (!pcapFilter) return true;
     const f = pcapFilter.toLowerCase().trim();
 
-    const srcIp = pkt.srcIp.toLowerCase();
-    const destIp = pkt.destIp.toLowerCase();
-    const srcPort = pkt.srcPort.toString();
-    const destPort = pkt.destPort.toString();
-    const protocol = pkt.protocol.toLowerCase();
-    const info = pkt.info.toLowerCase();
+    const srcIp = (pkt.srcIp || '').toLowerCase();
+    const destIp = (pkt.destIp || '').toLowerCase();
+    const srcPort = (pkt.srcPort ?? 0).toString();
+    const destPort = (pkt.destPort ?? 0).toString();
+    const protocol = (pkt.protocol || '').toLowerCase();
+    const info = (pkt.info || '').toLowerCase();
     const verdict = (pkt.threatRating || '').toLowerCase();
     const flags = (pkt.flags || []).join(' ').toLowerCase();
     const dns = (pkt.dnsQuery || '').toLowerCase();
@@ -146,23 +155,23 @@ export const PcapAnalyzer: React.FC = () => {
 ================================================================================
 NetTrace V1.0 - DFIR PACKET DEEP INSPECTION FORENSIC REPORT
 ================================================================================
-Filename: ${pcapSession.filename}
-File Size: ${(pcapSession.fileSizeBytes / 1024).toFixed(1)} KB
-Total Packets: ${pcapSession.totalPackets}
-Duration: ${pcapSession.durationSeconds}s
+Filename: ${pcapSession?.filename || 'No Trace File'}
+File Size: ${((pcapSession?.fileSizeBytes || 0) / 1024).toFixed(1)} KB
+Total Packets: ${pcapSession?.totalPackets || 0}
+Duration: ${pcapSession?.durationSeconds || 0}s
 Generated At: ${new Date().toISOString()}
 
 1. TOP PROTOCOL DISTRIBUTION
-${pcapSession.topProtocols.map(p => ` - ${p.name}: ${p.count} frames (${p.percentage}%)`).join('\n')}
+${(pcapSession?.topProtocols || []).map(p => ` - ${p.name}: ${p.count} frames (${p.percentage}%)`).join('\n')}
 
 2. ANOMALY DETECTIONS
-${pcapSession.suspiciousDetections.map(s => ` - [${s.severity}] ${s.title}: ${s.description}`).join('\n')}
+${(pcapSession?.suspiciousDetections || []).map(s => ` - [${s.severity}] ${s.title}: ${s.description}`).join('\n')}
 
 3. CAPTURED PACKET SUMMARY LIST
-${pcapSession.packets.map(p => `Frame #${p.packetNo} | ${p.timestamp} | ${p.srcIp}:${p.srcPort} -> ${p.destIp}:${p.destPort} | ${p.protocol} | ${p.length}B | Verdict: ${p.threatRating || 'Clean'} | Info: ${p.info}`).join('\n')}
+${(pcapSession?.packets || []).map(p => `Frame #${p.packetNo} | ${p.timestamp} | ${p.srcIp}:${p.srcPort} -> ${p.destIp}:${p.destPort} | ${p.protocol} | ${p.length}B | Verdict: ${p.threatRating || 'Clean'} | Info: ${p.info}`).join('\n')}
       `.trim();
 
-      downloadFile(pdfContent, `pcap_forensic_report_${pcapSession.filename}.pdf`, 'application/pdf');
+      downloadFile(pdfContent, `pcap_forensic_report_${pcapSession?.filename || 'trace'}.pdf`, 'application/pdf');
       showToast('PDF exported successfully', 'success');
     } catch (err) {
       showToast('Failed to export PDF report', 'error');
@@ -194,11 +203,11 @@ ${pcapSession.packets.map(p => `Frame #${p.packetNo} | ${p.timestamp} | ${p.srcI
         p.length,
         `"${p.flags?.join(' ') || ''}"`,
         `"${p.threatRating || 'Clean'}"`,
-        `"${p.info.replace(/"/g, '""')}"`
+        `"${(p.info || '').replace(/"/g, '""')}"`
       ]);
 
       const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-      downloadFile(csvContent, `pcap_packets_${pcapSession.filename}.csv`, 'text/csv');
+      downloadFile(csvContent, `pcap_packets_${pcapSession?.filename || 'trace'}.csv`, 'text/csv');
       showToast('CSV exported successfully', 'success');
     } catch (err) {
       showToast('Failed to export CSV', 'error');
@@ -208,8 +217,8 @@ ${pcapSession.packets.map(p => `Frame #${p.packetNo} | ${p.timestamp} | ${p.srcI
   const handleExportJson = () => {
     setExportMenuOpen(false);
     try {
-      const jsonContent = JSON.stringify(pcapSession, null, 2);
-      downloadFile(jsonContent, `pcap_analysis_${pcapSession.filename}.json`, 'application/json');
+      const jsonContent = JSON.stringify(pcapSession || {}, null, 2);
+      downloadFile(jsonContent, `pcap_analysis_${pcapSession?.filename || 'trace'}.json`, 'application/json');
       showToast('JSON exported successfully', 'success');
     } catch (err) {
       showToast('Failed to export JSON', 'error');
@@ -222,16 +231,16 @@ ${pcapSession.packets.map(p => `Frame #${p.packetNo} | ${p.timestamp} | ${p.srcI
       const mdContent = `# NetTrace V1.0 PCAP Analysis Report
 
 ## Trace Overview
-- **Filename:** \`${pcapSession.filename}\`
-- **File Size:** ${(pcapSession.fileSizeBytes / 1024).toFixed(1)} KB
-- **Total Packets:** ${pcapSession.totalPackets}
-- **Capture Duration:** ${pcapSession.durationSeconds} seconds
+- **Filename:** \`${pcapSession?.filename || 'No Trace File'}\`
+- **File Size:** ${((pcapSession?.fileSizeBytes || 0) / 1024).toFixed(1)} KB
+- **Total Packets:** ${pcapSession?.totalPackets || 0}
+- **Capture Duration:** ${pcapSession?.durationSeconds || 0} seconds
 
 ## Protocol Distribution
-${pcapSession.topProtocols.map(p => `- **${p.name}:** ${p.count} frames (${p.percentage}%)`).join('\n')}
+${(pcapSession?.topProtocols || []).map(p => `- **${p.name}:** ${p.count} frames (${p.percentage}%)`).join('\n')}
 
 ## Threat Anomaly Signatures
-${pcapSession.suspiciousDetections.map(s => `### [${s.severity}] ${s.title}\n${s.description}\n`).join('\n')}
+${(pcapSession?.suspiciousDetections || []).map(s => `### [${s.severity}] ${s.title}\n${s.description}\n`).join('\n')}
 
 ## Packet List Table
 | Frame # | Timestamp | Source Endpoint | Destination Endpoint | Protocol | Length | TCP Flags | Verdict |
@@ -239,7 +248,7 @@ ${pcapSession.suspiciousDetections.map(s => `### [${s.severity}] ${s.title}\n${s
 ${filteredPackets.map(p => `| #${p.packetNo} | ${p.timestamp} | ${p.srcIp}:${p.srcPort} | ${p.destIp}:${p.destPort} | ${p.protocol} | ${p.length}B | ${p.flags?.join(' ') || '-'} | ${p.threatRating || 'Clean'} |`).join('\n')}
 `;
 
-      downloadFile(mdContent, `pcap_analysis_${pcapSession.filename}.md`, 'text/markdown');
+      downloadFile(mdContent, `pcap_analysis_${pcapSession?.filename || 'trace'}.md`, 'text/markdown');
       showToast('Markdown exported successfully', 'success');
     } catch (err) {
       showToast('Failed to export Markdown', 'error');
@@ -251,22 +260,22 @@ ${filteredPackets.map(p => `| #${p.packetNo} | ${p.timestamp} | ${p.srcIp}:${p.s
     try {
       const summaryText = `NetTrace V1.0 PCAP Summary
 ----------------------------------------
-Filename: ${pcapSession.filename}
-Uploaded At: ${pcapSession.uploadedAt}
-Size: ${(pcapSession.fileSizeBytes / 1024).toFixed(1)} KB
-Packet Count: ${pcapSession.totalPackets}
-Duration: ${pcapSession.durationSeconds}s
+Filename: ${pcapSession?.filename || 'No Trace File'}
+Uploaded At: ${pcapSession?.uploadedAt || 'N/A'}
+Size: ${((pcapSession?.fileSizeBytes || 0) / 1024).toFixed(1)} KB
+Packet Count: ${pcapSession?.totalPackets || 0}
+Duration: ${pcapSession?.durationSeconds || 0}s
 
 Top Protocols:
-${pcapSession.topProtocols.map(p => ` - ${p.name}: ${p.count} (${p.percentage}%)`).join('\n')}
+${(pcapSession?.topProtocols || []).map(p => ` - ${p.name}: ${p.count} (${p.percentage}%)`).join('\n')}
 
 Anomalies Detected:
-${pcapSession.suspiciousDetections.map(d => ` - ${d.title} (${d.severity}): ${d.description}`).join('\n')}
+${(pcapSession?.suspiciousDetections || []).map(d => ` - ${d.title} (${d.severity}): ${d.description}`).join('\n')}
 
 Extracted Files:
-${pcapSession.extractedFiles.map(f => ` - ${f.filename} (${f.sizeBytes} B) - SHA256: ${f.sha256}`).join('\n')}
+${(pcapSession?.extractedFiles || []).map(f => ` - ${f.filename} (${f.sizeBytes} B) - SHA256: ${f.sha256}`).join('\n')}
 `;
-      downloadFile(summaryText, `pcap_summary_${pcapSession.filename}.txt`, 'text/plain');
+      downloadFile(summaryText, `pcap_summary_${pcapSession?.filename || 'trace'}.txt`, 'text/plain');
       showToast('PCAP Summary exported successfully', 'success');
     } catch (err) {
       showToast('Failed to export PCAP summary', 'error');
@@ -276,7 +285,7 @@ ${pcapSession.extractedFiles.map(f => ` - ${f.filename} (${f.sizeBytes} B) - SHA
   const handleExportIocList = () => {
     setExportMenuOpen(false);
     try {
-      const iocRows = iocs.map(i => `"${i.type}","${i.value}","${i.threatScore}","${i.status}","${i.category}","${i.description.replace(/"/g, '""')}"`);
+      const iocRows = (iocs || []).map(i => `"${i.type}","${i.value}","${i.threatScore}","${i.status}","${i.category}","${(i.description || '').replace(/"/g, '""')}"`);
       const csvContent = ['Type,Value,Threat Score,Status,Category,Description', ...iocRows].join('\n');
       downloadFile(csvContent, `detected_iocs.csv`, 'text/csv');
       showToast('IOC List exported successfully', 'success');
@@ -288,7 +297,7 @@ ${pcapSession.extractedFiles.map(f => ` - ${f.filename} (${f.sizeBytes} B) - SHA
   const handleExportTimeline = () => {
     setExportMenuOpen(false);
     try {
-      const timelineRows = filteredPackets.map(p => `"${p.timestamp}","Packet #${p.packetNo} Captured","${p.srcIp}:${p.srcPort} -> ${p.destIp}:${p.destPort} (${p.protocol})","${p.threatRating || 'Clean'}","${p.info.replace(/"/g, '""')}"`);
+      const timelineRows = filteredPackets.map(p => `"${p.timestamp}","Packet #${p.packetNo} Captured","${p.srcIp}:${p.srcPort} -> ${p.destIp}:${p.destPort} (${p.protocol})","${p.threatRating || 'Clean'}","${(p.info || '').replace(/"/g, '""')}"`);
       const csvContent = ['Timestamp,Event Title,Endpoints,Verdict,Details', ...timelineRows].join('\n');
       downloadFile(csvContent, `investigation_timeline.csv`, 'text/csv');
       showToast('Timeline exported successfully', 'success');
@@ -300,7 +309,7 @@ ${pcapSession.extractedFiles.map(f => ` - ${f.filename} (${f.sizeBytes} B) - SHA
   const handleExportEvidenceMetadata = () => {
     setExportMenuOpen(false);
     try {
-      const metadata = JSON.stringify(evidence, null, 2);
+      const metadata = JSON.stringify(evidence || [], null, 2);
       downloadFile(metadata, `evidence_metadata.json`, 'application/json');
       showToast('Evidence Metadata exported successfully', 'success');
     } catch (err) {
@@ -482,16 +491,16 @@ ${pcapSession.extractedFiles.map(f => ` - ${f.filename} (${f.sizeBytes} B) - SHA
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 font-sans">
         <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-1 shadow-lg">
           <span className="text-[11px] text-slate-500 uppercase font-semibold">Loaded Trace File:</span>
-          <p className="text-xs font-bold text-cyan-300 font-mono truncate">{pcapSession.filename}</p>
+          <p className="text-xs font-bold text-cyan-300 font-mono truncate">{pcapSession?.filename || 'No PCAP Session Loaded'}</p>
           <p className="text-[10px] text-slate-400 font-mono">
-            {(pcapSession.fileSizeBytes / 1024).toFixed(1)} KB • {pcapSession.totalPackets} Packets
+            {((pcapSession?.fileSizeBytes || 0) / 1024).toFixed(1)} KB • {pcapSession?.totalPackets || 0} Packets
           </p>
         </div>
 
         <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-2 shadow-lg">
           <span className="text-[11px] text-slate-500 uppercase font-semibold">Protocol Distribution:</span>
           <div className="flex flex-wrap gap-1 text-xs font-mono">
-            {pcapSession.topProtocols.map((p, idx) => (
+            {(pcapSession?.topProtocols || []).map((p, idx) => (
               <span key={`${p.name}-${idx}`} className="px-2 py-0.5 bg-slate-950 border border-slate-800 rounded text-[10px] text-slate-300">
                 {p.name} ({p.percentage}%)
               </span>
@@ -503,10 +512,10 @@ ${pcapSession.extractedFiles.map(f => ` - ${f.filename} (${f.sizeBytes} B) - SHA
           <span className="text-[11px] text-slate-500 uppercase font-semibold">Suspicious Alerts:</span>
           <p className="text-xs font-bold text-red-400 flex items-center space-x-1 font-mono">
             <ShieldAlert className="w-4 h-4" />
-            <span>{pcapSession.suspiciousDetections.length} Anomaly Signatures</span>
+            <span>{(pcapSession?.suspiciousDetections || []).length} Anomaly Signatures</span>
           </p>
           <p className="text-[10px] text-slate-400 truncate font-sans">
-            {pcapSession.suspiciousDetections[0]?.title || 'No active anomalies'}
+            {(pcapSession?.suspiciousDetections || [])[0]?.title || 'No active anomalies'}
           </p>
         </div>
 
@@ -514,10 +523,10 @@ ${pcapSession.extractedFiles.map(f => ` - ${f.filename} (${f.sizeBytes} B) - SHA
           <span className="text-[11px] text-slate-500 uppercase font-semibold">Payloads Extracted:</span>
           <p className="text-xs font-bold text-amber-400 flex items-center space-x-1 font-mono">
             <FileCode className="w-4 h-4" />
-            <span>{pcapSession.extractedFiles.length} Binary Files</span>
+            <span>{(pcapSession?.extractedFiles || []).length} Binary Files</span>
           </p>
           <div className="flex items-center space-x-1 pt-1">
-            {pcapSession.extractedFiles.map((f, idx) => (
+            {(pcapSession?.extractedFiles || []).map((f, idx) => (
               <Tooltip key={`${f.filename}-${idx}`} content="Save reconstructed binary to Evidence Vault with SHA-256 hash.">
                 <button
                   onClick={() => handleSaveToEvidence(f)}

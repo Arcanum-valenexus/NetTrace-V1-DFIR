@@ -8,7 +8,7 @@ export const initialIncidents: Incident[] = [
     severity: 'Critical',
     status: 'Investigating',
     category: 'Ransomware',
-    assignedAnalyst: 'Alex Mercer (Lead DFIR)',
+    assignedAnalyst: 'Lead DFIR Analyst (Lead DFIR)',
     createdAt: '2026-07-29T14:22:00Z',
     updatedAt: '2026-07-29T20:15:00Z',
     summary: 'Automated EDR alert triggered on DC-01.exe execution after NTLM Relay exploitation. Shadow copies purged via vssadmin and encrypted volume extension .lockbit detected across 14 network shares.',
@@ -100,7 +100,7 @@ export const initialIncidents: Incident[] = [
     notes: [
       {
         id: 'note-1',
-        author: 'Alex Mercer',
+        author: 'Lead DFIR Analyst',
         timestamp: '2026-07-29T14:35:00Z',
         content: 'Host DC-01 has been network isolated via CrowdStrike EDR API. Verified active backup vault on AWS S3 is intact and untampered.'
       },
@@ -112,10 +112,10 @@ export const initialIncidents: Incident[] = [
       }
     ],
     containmentChecklist: [
-      { id: 'chk-1', task: 'Network isolate host DC-01 and FS-APP-02', completed: true, assignedTo: 'Alex Mercer' },
+      { id: 'chk-1', task: 'Network isolate host DC-01 and FS-APP-02', completed: true, assignedTo: 'Lead DFIR Analyst' },
       { id: 'chk-2', task: 'Revoke compromised VPN user credentials for r.davis', completed: true, assignedTo: 'Sarah Jenkins' },
       { id: 'chk-3', task: 'Reset Enterprise Admin and krbtgt password twice', completed: true, assignedTo: 'Domain Ops' },
-      { id: 'chk-4', task: 'Perform memory dump & disk forensic acquisition', completed: false, assignedTo: 'Alex Mercer' },
+      { id: 'chk-4', task: 'Perform memory dump & disk forensic acquisition', completed: false, assignedTo: 'Lead DFIR Analyst' },
       { id: 'chk-5', task: 'Verify offline backup restore points', completed: true, assignedTo: 'Backup Admin' }
     ]
   },
@@ -180,7 +180,7 @@ export const initialIncidents: Incident[] = [
     ],
     containmentChecklist: [
       { id: 'chk-10', task: 'Block IP 192.236.198.42 on Perimeter Firewall', completed: true, assignedTo: 'Sarah Jenkins' },
-      { id: 'chk-11', task: 'Add YARA rule CS_Beacon_v4 to EDR endpoint scanner', completed: true, assignedTo: 'Alex Mercer' }
+      { id: 'chk-11', task: 'Add YARA rule CS_Beacon_v4 to EDR endpoint scanner', completed: true, assignedTo: 'Lead DFIR Analyst' }
     ]
   },
   {
@@ -556,9 +556,9 @@ export const initialEvidence: EvidenceArtifact[] = [
     hashSha256: 'a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0',
     hashMd5: '9b74c2d8e1f04231a5b82c918347102e',
     uploadedAt: '31 Jul 2026 15:00 UTC',
-    uploadedBy: 'Alex Mercer',
+    uploadedBy: 'Lead DFIR Analyst',
     ownerInvestigatorId: 'inv-001',
-    ownerInvestigatorName: 'Alex Mercer (Lead DFIR Analyst)',
+    ownerInvestigatorName: 'Lead DFIR Analyst (Lead DFIR Analyst)',
     accessPassword: 'NetTrace2026!',
     storagePath: '/evidences/2026/inc-1/DC01_lsass_memory_dump.dmp',
     chainOfCustody: [
@@ -567,9 +567,9 @@ export const initialEvidence: EvidenceArtifact[] = [
         evidenceId: 'ev-101',
         caseId: 'CASE-2026-001',
         action: 'Evidence Verified',
-        actor: 'Alex Mercer',
+        actor: 'Lead DFIR Analyst',
         investigatorId: 'inv-001',
-        investigatorName: 'Alex Mercer',
+        investigatorName: 'Lead DFIR Analyst',
         timestamp: '31 Jul 2026 15:05 UTC',
         notes: 'SHA256 checksum verified against acquisition baseline.'
       },
@@ -578,9 +578,9 @@ export const initialEvidence: EvidenceArtifact[] = [
         evidenceId: 'ev-101',
         caseId: 'CASE-2026-001',
         action: 'Evidence Registered',
-        actor: 'Alex Mercer',
+        actor: 'Lead DFIR Analyst',
         investigatorId: 'inv-001',
-        investigatorName: 'Alex Mercer',
+        investigatorName: 'Lead DFIR Analyst',
         timestamp: '31 Jul 2026 15:00 UTC',
         notes: 'Acquired via WinPmem 4.0 CLI over WinRM session on isolated host DC-01.'
       }
@@ -629,9 +629,9 @@ export const initialEvidence: EvidenceArtifact[] = [
     hashSha256: 'e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9',
     hashMd5: 'abcdef1234567890abcdef1234567890',
     uploadedAt: '31 Jul 2026 14:45 UTC',
-    uploadedBy: 'Alex Mercer',
+    uploadedBy: 'Lead DFIR Analyst',
     ownerInvestigatorId: 'inv-001',
-    ownerInvestigatorName: 'Alex Mercer',
+    ownerInvestigatorName: 'Lead DFIR Analyst',
     accessPassword: 'NetTrace2026!',
     storagePath: '/evidences/2026/inc-1/DC01_SecurityLogs.evtx',
     chainOfCustody: [
@@ -640,9 +640,9 @@ export const initialEvidence: EvidenceArtifact[] = [
         evidenceId: 'ev-103',
         caseId: 'CASE-2026-001',
         action: 'Evidence Uploaded',
-        actor: 'Alex Mercer',
+        actor: 'Lead DFIR Analyst',
         investigatorId: 'inv-001',
-        investigatorName: 'Alex Mercer',
+        investigatorName: 'Lead DFIR Analyst',
         timestamp: '31 Jul 2026 14:45 UTC',
         notes: 'Exported System & Security EVTX logs for NTLM relay correlation.'
       }
@@ -660,22 +660,22 @@ export const initialReports: ForensicsReport[] = [
     caseId: 'CASE-2026-001',
     incidentTitle: 'Unauthorized C2 Beaconing & Lateral Movement Incident',
     generatedAt: '2026-07-29T18:00:00Z',
-    generatedBy: 'Alex Mercer',
+    generatedBy: 'Lead DFIR Analyst',
     organization: 'Zyphera Security Labs',
     status: 'Final',
     reportHash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
     history: [
-      { id: 'h-1', event: 'Created', timestamp: '2026-07-29 14:30:00 UTC', actor: 'Alex Mercer', notes: 'Report draft initialized' },
-      { id: 'h-2', event: 'Compiled', timestamp: '2026-07-29 16:00:00 UTC', actor: 'Alex Mercer', notes: 'Automated telemetry compilation completed' },
-      { id: 'h-3', event: 'Reviewed', timestamp: '2026-07-29 17:15:00 UTC', actor: 'Alex Mercer', notes: 'Peer review completed with evidence hash verification' },
-      { id: 'h-4', event: 'Finalized', timestamp: '2026-07-29 18:00:00 UTC', actor: 'Alex Mercer', notes: 'Report finalized and locked for distribution' }
+      { id: 'h-1', event: 'Created', timestamp: '2026-07-29 14:30:00 UTC', actor: 'Lead DFIR Analyst', notes: 'Report draft initialized' },
+      { id: 'h-2', event: 'Compiled', timestamp: '2026-07-29 16:00:00 UTC', actor: 'Lead DFIR Analyst', notes: 'Automated telemetry compilation completed' },
+      { id: 'h-3', event: 'Reviewed', timestamp: '2026-07-29 17:15:00 UTC', actor: 'Lead DFIR Analyst', notes: 'Peer review completed with evidence hash verification' },
+      { id: 'h-4', event: 'Finalized', timestamp: '2026-07-29 18:00:00 UTC', actor: 'Lead DFIR Analyst', notes: 'Report finalized and locked for distribution' }
     ],
     coverPage: {
       title: 'Unauthorized C2 Beaconing & Lateral Movement Incident',
       caseId: 'CASE-2026-001',
       reportId: 'REP-2026-001',
       generatedDate: '2026-07-29 18:00:00 UTC',
-      leadInvestigator: 'Alex Mercer',
+      leadInvestigator: 'Lead DFIR Analyst',
       organization: 'Zyphera Security Labs',
       classification: 'CONFIDENTIAL // FOR OFFICIAL USE ONLY (FOUO)'
     },
@@ -685,7 +685,7 @@ export const initialReports: ForensicsReport[] = [
       category: 'Ransomware / Lateral Movement',
       severity: 'Critical',
       currentStage: 'Containment',
-      assignedAnalyst: 'Alex Mercer',
+      assignedAnalyst: 'Lead DFIR Analyst',
       summary: 'Automated detection flagged elevated outbound TCP/443 traffic with encrypted payload patterns and unauthorized Kerberos ticket requests.',
       impactedAssets: [
         { hostname: 'DC-01.corp.internal', ipAddress: '10.0.1.5', status: 'Isolated', os: 'Windows Server 2022' },
@@ -700,9 +700,9 @@ export const initialReports: ForensicsReport[] = [
       { timestamp: '2026-07-29 14:21:00 UTC', source: 'Timeline Engine', eventType: 'Host Containment', description: 'EDR isolated DC-01 and revoked session OAuth tokens.' }
     ],
     evidenceInventory: [
-      { id: 'ev-101', name: 'DC01_lsass_memory_dump.dmp', category: 'Memory Dump', sizeBytes: 842100520, hashSha256: 'a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0', hashMd5: '9b74c2d8e1f04231a5b82c918347102e', uploadedBy: 'Alex Mercer', integrityStatus: 'VERIFIED' },
+      { id: 'ev-101', name: 'DC01_lsass_memory_dump.dmp', category: 'Memory Dump', sizeBytes: 842100520, hashSha256: 'a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0', hashMd5: '9b74c2d8e1f04231a5b82c918347102e', uploadedBy: 'Lead DFIR Analyst', integrityStatus: 'VERIFIED' },
       { id: 'ev-102', name: 'incident_capture_DC01_10.0.1.5.pcapng', category: 'PCAP Trace', sizeBytes: 248190, hashSha256: 'c3ab8ff13720e8ad9047dd39466b3c8974e592c2fa383d4a3960714caef0c4f2', hashMd5: '4f92a10521e89b418520d29173c09192', uploadedBy: 'Sarah Jenkins', integrityStatus: 'VERIFIED' },
-      { id: 'ev-103', name: 'Security_EventLog_DC01_4624_4672.evtx', category: 'Event Log', sizeBytes: 15420100, hashSha256: 'e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9', hashMd5: 'abcdef1234567890abcdef1234567890', uploadedBy: 'Alex Mercer', integrityStatus: 'VERIFIED' }
+      { id: 'ev-103', name: 'Security_EventLog_DC01_4624_4672.evtx', category: 'Event Log', sizeBytes: 15420100, hashSha256: 'e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9', hashMd5: 'abcdef1234567890abcdef1234567890', uploadedBy: 'Lead DFIR Analyst', integrityStatus: 'VERIFIED' }
     ],
     packetAnalysis: {
       pcapFilename: 'incident_capture_DC01_10.0.1.5.pcapng',
@@ -730,8 +730,8 @@ export const initialReports: ForensicsReport[] = [
       checklistItems: [
         { task: 'Block IP 185.220.101.5 on Perimeter Firewall', completed: true, assignedTo: 'Sarah Jenkins' },
         { task: 'Block Domain auth-update-cdn.com on DNS Gateway', completed: true, assignedTo: 'Sarah Jenkins' },
-        { task: 'Force global reset for krbtgt account credentials', completed: true, assignedTo: 'Alex Mercer' },
-        { task: 'Perform clean bare-metal rebuild of DC-01', completed: false, assignedTo: 'Alex Mercer' }
+        { task: 'Force global reset for krbtgt account credentials', completed: true, assignedTo: 'Lead DFIR Analyst' },
+        { task: 'Perform clean bare-metal rebuild of DC-01', completed: false, assignedTo: 'Lead DFIR Analyst' }
       ]
     },
     remediationRecommendations: [
@@ -746,9 +746,9 @@ export const initialReports: ForensicsReport[] = [
       { artifactName: 'Security_EventLog_DC01_4624_4672.evtx', category: 'Event Log', hashSha256: 'e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9', hashMd5: 'abcdef1234567890abcdef1234567890', verificationStatus: 'VERIFIED', verifiedAt: '31 Jul 2026 14:45 UTC' }
     ],
     chainOfCustodySummary: [
-      { evidenceName: 'DC01_lsass_memory_dump.dmp', action: 'Evidence Verified', actor: 'Alex Mercer', timestamp: '31 Jul 2026 15:00 UTC', notes: 'Hash baseline verified against physical acquire log.' },
+      { evidenceName: 'DC01_lsass_memory_dump.dmp', action: 'Evidence Verified', actor: 'Lead DFIR Analyst', timestamp: '31 Jul 2026 15:00 UTC', notes: 'Hash baseline verified against physical acquire log.' },
       { evidenceName: 'incident_capture_DC01_10.0.1.5.pcapng', action: 'Evidence Uploaded', actor: 'Sarah Jenkins', timestamp: '31 Jul 2026 14:30 UTC', notes: 'Exported from Palo Alto SPAN mirror port.' },
-      { evidenceName: 'Security_EventLog_DC01_4624_4672.evtx', action: 'Evidence Uploaded', actor: 'Alex Mercer', timestamp: '31 Jul 2026 14:45 UTC', notes: 'Exported system security logs.' }
+      { evidenceName: 'Security_EventLog_DC01_4624_4672.evtx', action: 'Evidence Uploaded', actor: 'Lead DFIR Analyst', timestamp: '31 Jul 2026 14:45 UTC', notes: 'Exported system security logs.' }
     ],
     investigatorNotes: [
       'Initial triage confirmed packet capture match with LSASS memory handle access.',

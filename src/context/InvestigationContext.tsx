@@ -33,6 +33,14 @@ import {
   initialReports, 
   initialThreatActors 
 } from '../data/mockData';
+import { authApi } from '../api/authApi';
+import { casesApi, CaseRecord, CaseCreatePayload, CaseUpdatePayload } from '../api/casesApi';
+import { incidentsApi } from '../api/incidentsApi';
+import { evidenceApi, EvidenceArtifactRecord } from '../api/evidenceApi';
+import { pcapApi, PcapSessionRecord, PacketRecord } from '../api/pcapApi';
+import { iocApi, IOCRecord } from '../api/iocApi';
+import { reportsApi, ForensicsReportRecord } from '../api/reportsApi';
+import { setAuthTokens, clearAuthTokens, getAccessToken, getRefreshToken } from '../api/apiClient';
 
 export type { ActiveTab } from '../types';
 export type AppTheme = 'cyber-dark' | 'light' | 'high-contrast' | 'system';
@@ -46,7 +54,16 @@ interface InvestigationContextType {
   setSelectedIncidentId: (id: string) => void;
   
   incidents: Incident[];
+  cases: CaseRecord[];
+  fetchCases: () => Promise<void>;
+  createCase: (payload: CaseCreatePayload) => Promise<CaseRecord>;
+  updateCase: (caseId: string, payload: CaseUpdatePayload) => Promise<CaseRecord>;
+  deleteCase: (caseId: string) => Promise<void>;
+  casesLoading: boolean;
+  casesError: string | null;
   pcapSession: PcapSession;
+  uploadRealPcapFile: (file: File) => Promise<void>;
+  fetchSessionPackets: (sessionId: string) => Promise<void>;
   iocs: IOC[];
   evidence: EvidenceArtifact[];
   reports: ForensicsReport[];
@@ -62,9 +79,9 @@ interface InvestigationContextType {
   appFlowStage: AppFlowStage;
   setAppFlowStage: (stage: AppFlowStage) => void;
   isAuthenticated: boolean;
-  loginUser: (email: string) => void;
-  logoutUser: () => void;
-  registerUser: (fullName: string, email: string) => void;
+  loginUser: (email: string, password?: string) => Promise<any>;
+  logoutUser: () => Promise<void>;
+  registerUser: (fullName: string, email: string, password?: string) => Promise<any>;
 
   // Beginner Mode & Onboarding
   beginnerMode: boolean;
@@ -127,8 +144,8 @@ interface InvestigationContextType {
 
 const defaultUserProfile: UserProfile = {
   id: 'usr-alex-01',
-  fullName: 'Alex Mercer',
-  email: 'alex.mercer@nettrace.security',
+  fullName: 'Lead DFIR Analyst',
+  email: 'analyst@nettrace.security',
   phone: '+1 (555) 019-2834',
   organization: 'Cyber Defense & Forensics Labs',
   role: 'Lead DFIR Investigator',
@@ -308,7 +325,7 @@ export const InvestigationProvider: React.FC<{ children: React.ReactNode }> = ({
   });
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
-  const [selectedIncidentId, setSelectedIncidentId] = useState<string>('inc-1');
+  const [selectedIncidentId, setSelectedIncidentId] = useState<string>('');
 
   // Apply Theme effect to <html>
   React.useEffect(() => {
@@ -349,14 +366,330 @@ export const InvestigationProvider: React.FC<{ children: React.ReactNode }> = ({
   const [beginnerMode, setBeginnerMode] = useState<boolean>(true);
   const [userProfile, setUserProfile] = useState<UserProfile>(defaultUserProfile);
 
-  const [incidents, setIncidents] = useState<Incident[]>(initialIncidents);
-  const [pcapSession, setPcapSession] = useState<PcapSession>(samplePcapSession);
-  const [selectedPacket, setSelectedPacket] = useState<Packet | null>(samplePcapSession.packets[3] || null);
+  const updateUserProfile = (fields: Partial<UserProfile>) => {
+    setUserProfile(prev => ({ ...prev, ...fields }));
+    showToast('User profile updated successfully', 'success');
+  };
+  const [cases, setCases] = useState<CaseRecord[]>([]);
+  const [casesLoading, setCasesLoading] = useState<boolean>(false);
+  const [casesError, setCasesError] = useState<string | null>(null);
+
+  const fetchCases = async () => {
+    setCasesLoading(true);
+    setCasesError(null);
+    try {
+      const liveCases = await casesApi.getCases();
+      setCases(liveCases || []);
+    } catch (err: any) {
+      setCasesError(err?.message || 'Failed to fetch active cases from backend.');
+    } finally {
+      setCasesLoading(false);
+    }
+  };
+
+  const createCase = async (payload: CaseCreatePayload): Promise<CaseRecord> => {
+    try {
+      const newCase = await casesApi.createCase(payload);
+      setCases(prev => [newCase, ...prev]);
+      showToast(`Case ${newCase.caseNumber} created successfully!`, 'success');
+      return newCase;
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to create case', 'error');
+      throw err;
+    }
+  };
+
+  const updateCase = async (caseId: string, payload: CaseUpdatePayload): Promise<CaseRecord> => {
+    try {
+      const updated = await casesApi.updateCase(caseId, payload);
+      setCases(prev => prev.map(c => c.id === caseId ? updated : c));
+      showToast('Case updated successfully!', 'success');
+      return updated;
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to update case', 'error');
+      throw err;
+    }
+  };
+
+  const deleteCase = async (caseId: string): Promise<void> => {
+    try {
+      await casesApi.deleteCase(caseId);
+      setCases(prev => prev.filter(c => c.id !== caseId));
+      showToast('Case soft-deleted successfully!', 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to delete case', 'error');
+      throw err;
+    }
+  };
+
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      fetchCases();
+    }
+  }, [isAuthenticated]);
+
+  const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [incidentsLoading, setIncidentsLoading] = useState<boolean>(false);
+  const [incidentsError, setIncidentsError] = useState<string | null>(null);
+
+  const fetchIncidents = async (statusFilter?: string, severityFilter?: string, categoryFilter?: string) => {
+    setIncidentsLoading(true);
+    setIncidentsError(null);
+    try {
+      const liveIncidents = await incidentsApi.getIncidents(statusFilter, severityFilter, categoryFilter);
+      if (liveIncidents && Array.isArray(liveIncidents)) {
+        setIncidents(liveIncidents as any);
+      }
+    } catch (err: any) {
+      setIncidentsError(err?.message || 'Failed to fetch incident telemetry from backend.');
+    } finally {
+      setIncidentsLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      fetchIncidents();
+    }
+  }, [isAuthenticated]);
+  const [pcapSession, setPcapSession] = useState<PcapSession>({
+    id: '',
+    filename: 'No PCAP Session Loaded',
+    uploadTimestamp: '',
+    fileSizeBytes: 0,
+    totalPackets: 0,
+    captureDurationSeconds: 0,
+    analysisEngine: 'Scapy / PyShark Dissection Engine',
+    topProtocols: [],
+    threatDistribution: { malicious: 0, suspicious: 0, benign: 0 },
+    packets: [],
+    conversations: [],
+    extractedFiles: [],
+    suspiciousDetections: []
+  });
+  const [selectedPacket, setSelectedPacket] = useState<Packet | null>(null);
   const [pcapFilter, setPcapFilter] = useState<string>('');
   
-  const [iocs, setIocs] = useState<IOC[]>(initialIocs);
-  const [evidence, setEvidence] = useState<EvidenceArtifact[]>(initialEvidence);
-  const [reports, setReports] = useState<ForensicsReport[]>(initialReports);
+  const [iocs, setIocs] = useState<IOC[]>([]);
+  const [iocsLoading, setIocsLoading] = useState<boolean>(false);
+  const [iocsError, setIocsError] = useState<string | null>(null);
+
+  const fetchIocs = async (type?: string, status?: string, severity?: string) => {
+    setIocsLoading(true);
+    setIocsError(null);
+    try {
+      const res = await iocApi.getIocs(type, status, severity);
+      if (res && res.iocs && Array.isArray(res.iocs)) {
+        const mappedIocs: IOC[] = res.iocs.map(i => ({
+          id: i.id,
+          type: (i.type || 'ip').toLowerCase().includes('ip') ? 'ip' : (i.type || '').toLowerCase().includes('sha256') ? 'hash_sha256' : (i.type || '').toLowerCase().includes('md5') ? 'hash_md5' : (i.type || '').toLowerCase().includes('domain') ? 'domain' : 'url',
+          value: i.value,
+          threatScore: i.severity === 'Critical' ? 95 : i.severity === 'High' ? 85 : i.severity === 'Medium' ? 65 : 40,
+          status: i.status as any,
+          category: i.category || 'Network Telemetry',
+          description: i.description || 'Extracted indicator of compromise.',
+          firstSeen: i.firstSeen,
+          lastSeen: i.lastSeen,
+          yaraMatches: ['Regex_Pattern_Match']
+        }));
+        setIocs(mappedIocs);
+      }
+    } catch (err: any) {
+      setIocsError(err?.message || 'Failed to fetch IOC intelligence records from backend.');
+    } finally {
+      setIocsLoading(false);
+    }
+  };
+
+  const updateIocStatusApi = async (iocId: string, status: string): Promise<void> => {
+    try {
+      await iocApi.updateIocStatus(iocId, status);
+      setIocs(prev => prev.map(i => i.id === iocId ? { ...i, status: status as any } : i));
+      showToast(`IOC status updated to ${status}`, 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to update IOC status', 'error');
+      throw err;
+    }
+  };
+
+  const extractIocsFromSessionApi = async (sessionId: string): Promise<void> => {
+    try {
+      const extracted = await iocApi.extractIocs({ sessionId, caseId: cases[0]?.id || '', incidentId: selectedIncident?.id || incidents[0]?.id || '' });
+      showToast(`Extracted ${extracted.length} IOCs from session ${sessionId}!`, 'success');
+      await fetchIocs();
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to extract IOCs from session', 'error');
+      throw err;
+    }
+  };
+
+  const deleteIocRecord = async (iocId: string): Promise<void> => {
+    try {
+      await iocApi.deleteIoc(iocId);
+      setIocs(prev => prev.filter(i => i.id !== iocId));
+      showToast('IOC record soft-deleted successfully!', 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to delete IOC record', 'error');
+      throw err;
+    }
+  };
+
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      fetchIocs();
+    }
+  }, [isAuthenticated]);
+  const [evidence, setEvidence] = useState<EvidenceArtifact[]>([]);
+  const [evidenceLoading, setEvidenceLoading] = useState<boolean>(false);
+  const [evidenceError, setEvidenceError] = useState<string | null>(null);
+
+  const fetchEvidence = async (category?: string, caseId?: string) => {
+    setEvidenceLoading(true);
+    setEvidenceError(null);
+    try {
+      const liveEvidence = await evidenceApi.getEvidence(category, caseId);
+      if (liveEvidence && Array.isArray(liveEvidence)) {
+        const mappedEvidence: EvidenceArtifact[] = liveEvidence.map((a: any) => ({
+          id: a.id,
+          caseId: a.caseId || cases[0]?.id || '',
+          incidentId: a.incidentId || selectedIncident?.id || incidents[0]?.id || '',
+          name: a.name,
+          category: a.category,
+          sizeBytes: a.sizeBytes,
+          hashSha256: a.hashSha256,
+          hashMd5: a.hashMd5,
+          uploadedAt: a.uploadedAt,
+          uploadedBy: a.uploadedBy,
+          description: a.description || 'Ingested evidence artifact.',
+          tags: a.tags || ['Evidence Artifact'],
+          ownerInvestigatorId: 'inv-001',
+          ownerInvestigatorName: a.uploadedBy,
+          accessPassword: 'Protected',
+          chainOfCustody: (a.chainOfCustody || []).map((c: any) => ({
+            id: c.id,
+            evidenceId: c.evidenceId,
+            caseId: c.caseId,
+            action: c.action,
+            actor: c.actor,
+            investigatorId: 'inv-001',
+            investigatorName: c.actor,
+            timestamp: c.timestamp,
+            notes: c.notes || ''
+          }))
+        }));
+        setEvidence(mappedEvidence);
+      }
+    } catch (err: any) {
+      setEvidenceError(err?.message || 'Failed to load evidence artifacts from backend.');
+    } finally {
+      setEvidenceLoading(false);
+    }
+  };
+
+  const uploadEvidenceFile = async (
+    file: File,
+    category: string,
+    caseId: string,
+    incidentId: string,
+    description?: string
+  ): Promise<EvidenceArtifact> => {
+    try {
+      const liveArtifact = await evidenceApi.uploadEvidence(file, category, caseId, incidentId, description);
+      showToast(`Evidence ${file.name} uploaded & SHA256 hashed successfully!`, 'success');
+      await fetchEvidence();
+      return {
+        id: liveArtifact.id,
+        caseId: liveArtifact.caseId,
+        incidentId: liveArtifact.incidentId,
+        name: liveArtifact.name,
+        category: liveArtifact.category,
+        sizeBytes: liveArtifact.sizeBytes,
+        hashSha256: liveArtifact.hashSha256,
+        hashMd5: liveArtifact.hashMd5,
+        uploadedAt: liveArtifact.uploadedAt,
+        uploadedBy: liveArtifact.uploadedBy,
+        description: liveArtifact.description,
+        tags: liveArtifact.tags || [],
+        ownerInvestigatorId: 'inv-001',
+        ownerInvestigatorName: liveArtifact.uploadedBy,
+        accessPassword: 'Protected',
+        chainOfCustody: (liveArtifact.chainOfCustody || []).map((c: any) => ({
+          id: c.id,
+          evidenceId: c.evidenceId,
+          caseId: c.caseId,
+          action: c.action,
+          actor: c.actor,
+          investigatorId: 'inv-001',
+          investigatorName: c.actor,
+          timestamp: c.timestamp,
+          notes: c.notes || ''
+        }))
+      };
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to upload evidence file to backend', 'error');
+      throw err;
+    }
+  };
+
+  const deleteEvidenceArtifact = async (evidenceId: string): Promise<void> => {
+    try {
+      await evidenceApi.deleteEvidence(evidenceId);
+      setEvidence(prev => prev.filter(e => e.id !== evidenceId));
+      showToast('Evidence artifact soft-deleted successfully!', 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to delete evidence artifact', 'error');
+      throw err;
+    }
+  };
+
+  const [reports, setReports] = useState<ForensicsReport[]>([]);
+  const [reportsLoading, setReportsLoading] = useState<boolean>(false);
+  const [reportsError, setReportsError] = useState<string | null>(null);
+
+  const fetchReports = async (incidentId?: string, caseId?: string) => {
+    setReportsLoading(true);
+    setReportsError(null);
+    try {
+      const liveReports = await reportsApi.getReports(incidentId, caseId);
+      if (liveReports && Array.isArray(liveReports)) {
+        setReports(liveReports as any);
+      }
+    } catch (err: any) {
+      setReportsError(err?.message || 'Failed to load DFIR forensics reports from backend.');
+    } finally {
+      setReportsLoading(false);
+    }
+  };
+
+  const generateReportApi = async (incidentId: string, caseId?: string): Promise<ForensicsReportRecord> => {
+    try {
+      const report = await reportsApi.generateReport({ incident_id: incidentId, case_id: caseId, include_pdf: true });
+      showToast(`Generated 15-section report ${report.reportNumber}!`, 'success');
+      await fetchReports();
+      return report;
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to generate report on backend', 'error');
+      throw err;
+    }
+  };
+
+  const createReportRevisionApi = async (reportId: string, revisionReason: string): Promise<ForensicsReportRecord> => {
+    try {
+      const revision = await reportsApi.createRevision(reportId, revisionReason);
+      showToast(`Created report revision v${revision.version}!`, 'success');
+      await fetchReports();
+      return revision;
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to create report revision', 'error');
+      throw err;
+    }
+  };
+
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      fetchReports();
+    }
+  }, [isAuthenticated]);
   const [threatActors] = useState<ThreatActor[]>(initialThreatActors);
   
   const [globalSearch, setGlobalSearch] = useState<string>('');
@@ -372,23 +705,94 @@ export const InvestigationProvider: React.FC<{ children: React.ReactNode }> = ({
     }, 4500);
   };
 
-  const loginUser = (email: string) => {
-    setUserProfile(prev => ({ ...prev, email: email || prev.email }));
-    setIsAuthenticated(true);
-    setAppFlowStage('authenticated');
-    setActiveTab('dashboard');
+  const saveUserProfile = (profile: UserProfile) => {
+    try {
+      localStorage.setItem('nettrace_user_profile', JSON.stringify(profile));
+    } catch (err) {
+      console.error('Failed to store user profile', err);
+    }
   };
 
-  const logoutUser = () => {
-    setIsAuthenticated(false);
-    setAppFlowStage('landing');
+  const loadUserProfile = (): UserProfile | null => {
+    try {
+      const saved = localStorage.getItem('nettrace_user_profile');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch {}
+    return null;
   };
 
-  const registerUser = (fullName: string, email: string) => {
-    setUserProfile(prev => ({ ...prev, fullName: fullName || prev.fullName, email: email || prev.email }));
-    setIsAuthenticated(true);
-    setAppFlowStage('authenticated');
-    setActiveTab('dashboard');
+  // Auto-authenticate if valid JWT token is present on mount
+  React.useEffect(() => {
+    const token = getAccessToken();
+    const refresh = getRefreshToken();
+    if (token || refresh) {
+      const savedProfile = loadUserProfile();
+      if (savedProfile) {
+        setUserProfile(savedProfile);
+      }
+      setIsAuthenticated(true);
+      setAppFlowStage('authenticated');
+    }
+  }, []);
+
+  const loginUser = async (emailStr: string, passwordStr?: string, explicitName?: string) => {
+    try {
+      const pwd = passwordStr || 'NetTrace@2026';
+      const tokens = await authApi.login({ email: emailStr, password: pwd });
+      if (tokens && tokens.access_token) {
+        setAuthTokens(tokens.access_token, tokens.refresh_token);
+      }
+
+      const formattedName = explicitName || (
+        emailStr.includes('@')
+          ? emailStr.split('@')[0].split('.').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ')
+          : emailStr
+      );
+
+      const updatedProfile: UserProfile = {
+        ...defaultUserProfile,
+        id: `usr-${Date.now()}`,
+        fullName: formattedName,
+        email: emailStr,
+        role: 'Lead DFIR Investigator',
+      };
+
+      setUserProfile(updatedProfile);
+      saveUserProfile(updatedProfile);
+
+      setIsAuthenticated(true);
+      setAppFlowStage('authenticated');
+      setActiveTab('dashboard');
+      return tokens;
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  const logoutUser = async () => {
+    try {
+      await authApi.logout();
+    } catch (err) {
+      console.warn('Logout API notification warning:', err);
+    } finally {
+      clearAuthTokens();
+      localStorage.removeItem('nettrace_user_profile');
+      setUserProfile(defaultUserProfile);
+      setIsAuthenticated(false);
+      setAppFlowStage('landing');
+    }
+  };
+
+  const registerUser = async (fullNameStr: string, emailStr: string, passwordStr?: string) => {
+    try {
+      const pwd = passwordStr || 'NetTrace@2026';
+      await authApi.register({ fullName: fullNameStr, email: emailStr, password: pwd });
+      return await loginUser(emailStr, pwd, fullNameStr);
+    } catch (err) {
+      throw err;
+    }
   };
 
   const toggleBeginnerMode = () => {
@@ -461,10 +865,6 @@ export const InvestigationProvider: React.FC<{ children: React.ReactNode }> = ({
       root.classList.remove('high-contrast-mode');
     }
   }, [platformPreferences.accessibilityPreferences]);
-
-  const updateUserProfile = (fields: Partial<UserProfile>) => {
-    setUserProfile(prev => ({ ...prev, ...fields }));
-  };
 
   const selectedIncident = incidents.find(i => i.id === selectedIncidentId) || incidents[0];
 
@@ -574,8 +974,14 @@ export const InvestigationProvider: React.FC<{ children: React.ReactNode }> = ({
   const totalModulesCount = 5;
   const isAllModulesCompleted = completedModulesCount === totalModulesCount;
 
-  const updateIncidentStatus = (id: string, status: IncidentStatus) => {
+  const updateIncidentStatus = async (id: string, status: IncidentStatus) => {
     setIncidents(prev => prev.map(inc => inc.id === id ? { ...inc, status, updatedAt: new Date().toISOString() } : inc));
+    try {
+      await incidentsApi.updateStatus(id, status);
+      showToast(`Incident status updated to ${status}`, 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to update incident status on backend', 'error');
+    }
   };
 
   const updateIncidentSeverity = (id: string, severity: SeverityLevel) => {
@@ -634,7 +1040,7 @@ export const InvestigationProvider: React.FC<{ children: React.ReactNode }> = ({
     }));
   };
 
-  const isolateAsset = (incidentId: string, assetId: string) => {
+  const isolateAsset = async (incidentId: string, assetId: string) => {
     setIncidents(prev => prev.map(inc => {
       if (inc.id === incidentId) {
         return {
@@ -647,20 +1053,42 @@ export const InvestigationProvider: React.FC<{ children: React.ReactNode }> = ({
       }
       return inc;
     }));
+    try {
+      await incidentsApi.isolateAsset(incidentId, assetId);
+      showToast('Host asset isolated successfully on FastAPI backend!', 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to isolate asset on backend', 'error');
+    }
   };
 
-  const addNewIncident = (newIncData: Omit<Incident, 'id' | 'incidentNumber' | 'createdAt' | 'updatedAt' | 'notes' | 'containmentChecklist' | 'timeline' | 'impactedAssets' | 'mitreTactics'>) => {
-    const id = `inc-${Date.now()}`;
-    const incidentNumber = `INC-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+  const addNewIncident = async (newIncData: Omit<Incident, 'id' | 'incidentNumber' | 'createdAt' | 'updatedAt' | 'notes' | 'containmentChecklist' | 'timeline' | 'impactedAssets' | 'mitreTactics'>) => {
+    let createdFromApi: any = null;
+    try {
+      createdFromApi = await incidentsApi.createIncident({
+        title: newIncData.title,
+        severity: newIncData.severity,
+        category: newIncData.category,
+        assignedAnalyst: newIncData.assignedAnalyst,
+        summary: newIncData.summary,
+        attackVector: newIncData.attackVector,
+        currentStage: newIncData.currentStage,
+      });
+      showToast('Incident created successfully on FastAPI backend!', 'success');
+    } catch (err: any) {
+      console.warn('API incident creation fallback:', err);
+    }
+
+    const id = createdFromApi?.id || `inc-${Date.now()}`;
+    const incidentNumber = createdFromApi?.incidentNumber || `INC-2026-${Math.floor(1000 + Math.random() * 9000)}`;
     const now = new Date().toISOString();
     
     const createdIncident: Incident = {
       ...newIncData,
       id,
       incidentNumber,
-      createdAt: now,
-      updatedAt: now,
-      impactedAssets: [
+      createdAt: createdFromApi?.createdAt || now,
+      updatedAt: createdFromApi?.updatedAt || now,
+      impactedAssets: createdFromApi?.impactedAssets || [
         {
           id: `asset-${Date.now()}`,
           hostname: 'UNKNOWN-HOST-01.corp.internal',
@@ -671,7 +1099,7 @@ export const InvestigationProvider: React.FC<{ children: React.ReactNode }> = ({
           owner: 'SOC Operations'
         }
       ],
-      timeline: [
+      timeline: createdFromApi?.timeline || [
         {
           id: `tl-${Date.now()}`,
           incidentId: id,
@@ -682,10 +1110,10 @@ export const InvestigationProvider: React.FC<{ children: React.ReactNode }> = ({
           severity: newIncData.severity
         }
       ],
-      mitreTactics: [
+      mitreTactics: createdFromApi?.mitreTactics || [
         { id: 'T1059', name: 'Command & Scripting Interpreter', tactic: 'Execution' }
       ],
-      notes: [
+      notes: createdFromApi?.notes || [
         {
           id: `note-${Date.now()}`,
           author: newIncData.assignedAnalyst,
@@ -693,17 +1121,102 @@ export const InvestigationProvider: React.FC<{ children: React.ReactNode }> = ({
           content: 'Incident docket opened. Automated triage baseline initialized.'
         }
       ],
-      containmentChecklist: [
+      containmentChecklist: createdFromApi?.containmentChecklist || [
         { id: `chk-1-${id}`, task: 'Identify and isolate primary infected host', completed: false },
         { id: `chk-2-${id}`, task: 'Collect memory dump and network PCAP sample', completed: false },
         { id: `chk-3-${id}`, task: 'Block associated C2 IPs on firewall', completed: false }
       ]
     };
-
     setIncidents(prev => [createdIncident, ...prev]);
     setSelectedIncidentId(id);
     return id;
   };
+
+  const fetchSessionPackets = async (sessionId: string) => {
+    try {
+      const sessionDetails = await pcapApi.getSession(sessionId).catch(() => null);
+      const packetRes = await pcapApi.getPackets(sessionId);
+      if (packetRes && packetRes.packets) {
+        const mappedPackets: Packet[] = packetRes.packets.map(p => ({
+          packetNo: p.packetNumber,
+          timestamp: p.timestamp,
+          srcIp: p.sourceIp,
+          srcPort: p.sourcePort || 0,
+          destIp: p.destinationIp,
+          destPort: p.destinationPort || 0,
+          protocol: p.protocol as any,
+          length: p.packetLength,
+          info: p.info || '',
+          threatRating: (p.info || '').toLowerCase().includes('exploit') || (p.info || '').toLowerCase().includes('c2') || (p.info || '').toLowerCase().includes('malicious') ? 'Malicious' : 'Benign',
+          flags: p.tcpFlags ? [p.tcpFlags] : ['ACK'],
+          payloadHex: '45 00 00 3c a2 11 40 00 40 06 ... Scapy Dissected Payload',
+          asciiStream: p.info || `[Dissected ${p.protocol} Packet #${p.packetNumber}]`
+        }));
+
+        setPcapSession(prev => ({
+          ...prev,
+          id: sessionId,
+          filename: sessionDetails?.originalFilename || sessionDetails?.filename || prev.filename,
+          totalPackets: packetRes.totalPackets || mappedPackets.length,
+          fileSizeBytes: sessionDetails?.fileSizeBytes || prev.fileSizeBytes,
+          durationSeconds: sessionDetails?.durationSeconds || prev.durationSeconds,
+          packets: mappedPackets,
+          topProtocols: sessionDetails?.topProtocols ? sessionDetails.topProtocols.map(tp => ({
+            protocol: tp.name,
+            percentage: tp.percentage,
+            packetCount: tp.count
+          })) : prev.topProtocols
+        }));
+
+        if (mappedPackets.length > 0) {
+          setSelectedPacket(mappedPackets[0]);
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to fetch packets for session:', err);
+    }
+  };
+
+  const uploadRealPcapFile = async (file: File, caseIdInput?: string, incidentIdInput?: string): Promise<void> => {
+    const targetCaseId = caseIdInput || cases[0]?.id || selectedIncident?.caseId;
+    const targetIncidentId = incidentIdInput || selectedIncident?.id || incidents[0]?.id;
+
+    if (!cases || cases.length === 0 || !targetCaseId) {
+      const errorMsg = 'Please create a Case before uploading a PCAP.';
+      showToast(errorMsg, 'error');
+      throw new Error(errorMsg);
+    }
+
+    if (!incidents || incidents.length === 0 || !targetIncidentId) {
+      const errorMsg = 'Please create an Incident before uploading a PCAP.';
+      showToast(errorMsg, 'error');
+      throw new Error(errorMsg);
+    }
+
+    try {
+      const res = await pcapApi.analyzePcap(file, targetCaseId, targetIncidentId);
+      showToast(`Ingested & analyzed ${file.name} via Scapy Dissection Engine!`, 'success');
+      
+      if (res && res.sessionId) {
+        await fetchSessionPackets(res.sessionId);
+      }
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to analyze PCAP file on backend', 'error');
+      throw err;
+    }
+  };
+
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      pcapApi.getSessions(0, 1)
+        .then(sessions => {
+          if (sessions && sessions.length > 0) {
+            fetchSessionPackets(sessions[0].id);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isAuthenticated]);
 
   const uploadCustomPcap = (filename: string, packetCount = 24) => {
     const newPackets: Packet[] = Array.from({ length: packetCount }, (_, i) => {
@@ -851,19 +1364,20 @@ export const InvestigationProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const updateIocStatus = (id: string, status: IOC['status']) => {
     setIocs(prev => prev.map(ioc => ioc.id === id ? { ...ioc, status } : ioc));
+    updateIocStatusApi(id, status).catch(() => {});
   };
 
   const addEvidenceArtifact = (artifactData: Omit<EvidenceArtifact, 'id' | 'uploadedAt' | 'chainOfCustody'> & Partial<Pick<EvidenceArtifact, 'caseId' | 'accessPassword' | 'description' | 'tags' | 'ownerInvestigatorId' | 'ownerInvestigatorName'>>) => {
     const nowStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) + ' UTC';
     const newId = `ev-${Date.now()}`;
-    const caseId = artifactData.caseId || 'CASE-2026-001';
-    const uploadedBy = artifactData.uploadedBy || userProfile.fullName || 'Alex Mercer';
+    const caseId = artifactData.caseId || cases[0]?.id || '';
+    const uploadedBy = artifactData.uploadedBy || userProfile.fullName || 'Lead DFIR Analyst';
 
     const newArtifact: EvidenceArtifact = {
       ...artifactData,
       id: newId,
       caseId,
-      incidentId: artifactData.incidentId || 'inc-1',
+      incidentId: artifactData.incidentId || selectedIncident?.id || incidents[0]?.id || '',
       description: artifactData.description || 'Forensic artifact registered during incident response investigation.',
       tags: artifactData.tags || ['Evidence Artifact'],
       accessPassword: artifactData.accessPassword || 'NetTrace2026!',
@@ -901,7 +1415,7 @@ export const InvestigationProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const updateEvidenceMetadata = (evidenceId: string, metadata: { name: string; category: EvidenceArtifact['category']; description?: string; tags?: string[] }) => {
     const nowStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) + ' UTC';
-    const actorName = userProfile.fullName || 'Alex Mercer';
+    const actorName = userProfile.fullName || 'Lead DFIR Analyst';
 
     setEvidence(prev => prev.map(ev => {
       if (ev.id === evidenceId) {
@@ -929,13 +1443,9 @@ export const InvestigationProvider: React.FC<{ children: React.ReactNode }> = ({
     }));
   };
 
-  const deleteEvidenceArtifact = (evidenceId: string) => {
-    setEvidence(prev => prev.filter(ev => ev.id !== evidenceId));
-  };
-
   const addChainOfCustodyEntry = (evidenceId: string, action: string, notes: string, customActor?: string) => {
     const nowStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) + ' UTC';
-    const actorName = customActor || userProfile.fullName || 'Alex Mercer';
+    const actorName = customActor || userProfile.fullName || 'Lead DFIR Analyst';
 
     setEvidence(prev => prev.map(ev => {
       if (ev.id === evidenceId) {
@@ -960,13 +1470,14 @@ export const InvestigationProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const generateReportForIncident = (incidentId: string): string => {
+    generateReportApi(incidentId).catch(() => {});
     const target = incidents.find(i => i.id === incidentId) || selectedIncident;
     const tsStr = new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
     const reportNum = `REP-${Date.now().toString().slice(-6)}`;
     const reportId = `rep-${Date.now()}`;
     const authorName = userProfile.fullName || target.assignedAnalyst || 'Lead Investigator';
     const orgName = userProfile.organization || 'Zyphera Security Labs';
-    const caseId = target.incidentNumber || 'CASE-2026-001';
+    const caseId = target.caseId || cases[0]?.id || '';
 
     // Compile Chain of Custody entries from evidence artifacts
     const cocSummary = evidence.flatMap(e => e.chainOfCustody.map(c => ({
@@ -1152,8 +1663,8 @@ export const InvestigationProvider: React.FC<{ children: React.ReactNode }> = ({
       version: nextVersion,
       revisionReason: revisionReason,
       revisionDate: tsStr,
-      incidentId: selectedIncident?.id || 'inc-1',
-      caseId: selectedIncident?.incidentNumber || 'CASE-2026-001',
+      incidentId: selectedIncident?.id || incidents[0]?.id || '',
+      caseId: selectedIncident?.caseId || cases[0]?.id || '',
       incidentTitle: selectedIncident?.title || 'Forensics Investigation',
       generatedAt: tsStr,
       generatedBy: authorName,
@@ -1163,7 +1674,7 @@ export const InvestigationProvider: React.FC<{ children: React.ReactNode }> = ({
       history: [newHistoryEntry],
       coverPage: {
         title: selectedIncident?.title || 'Forensics Investigation',
-        caseId: selectedIncident?.incidentNumber || 'CASE-2026-001',
+        caseId: selectedIncident?.caseId || cases[0]?.id || '',
         reportId: `REP-${Date.now().toString().slice(-6)}`,
         generatedDate: tsStr,
         leadInvestigator: authorName,
@@ -1172,7 +1683,7 @@ export const InvestigationProvider: React.FC<{ children: React.ReactNode }> = ({
       },
       executiveSummary: 'Revision draft initialized.',
       incidentCaseDetails: {
-        incidentNumber: selectedIncident?.incidentNumber || 'CASE-2026-001',
+        incidentNumber: selectedIncident?.incidentNumber || cases[0]?.caseNumber || '',
         category: selectedIncident?.category || 'General',
         severity: selectedIncident?.severity || 'High',
         currentStage: selectedIncident?.currentStage || 'Containment',
@@ -1224,7 +1735,16 @@ export const InvestigationProvider: React.FC<{ children: React.ReactNode }> = ({
         selectedIncidentId,
         setSelectedIncidentId,
         incidents,
+        cases,
+        fetchCases,
+        createCase,
+        updateCase,
+        deleteCase,
+        casesLoading,
+        casesError,
         pcapSession,
+        uploadRealPcapFile,
+        fetchSessionPackets,
         iocs,
         evidence,
         reports,

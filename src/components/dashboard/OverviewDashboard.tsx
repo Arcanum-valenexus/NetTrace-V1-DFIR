@@ -21,13 +21,15 @@ import {
   Eye,
   FileSpreadsheet,
   AlertTriangle,
-  File
+  File,
+  RefreshCw
 } from 'lucide-react';
 import { useInvestigation } from '../../context/InvestigationContext';
 import { CardSkeleton, TableSkeleton } from '../common/SkeletonLoader';
 import { EmptyState } from '../common/EmptyState';
 import { Tooltip } from '../common/Tooltip';
 import { JargonBadge } from '../common/JargonBadge';
+import { dashboardApi, OverviewMetrics, PcapStatsMetrics, KillChainDistribution } from '../../api/dashboardApi';
 
 // Helper to format byte sizes
 function formatBytes(bytes: number): string {
@@ -82,18 +84,51 @@ export const OverviewDashboard: React.FC<{ onOpenNewIncident: () => void }> = ({
   } = useInvestigation();
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [metrics, setMetrics] = useState<OverviewMetrics | null>(null);
+  const [pcapStats, setPcapStats] = useState<PcapStatsMetrics | null>(null);
+  const [killChain, setKillChain] = useState<KillChainDistribution | null>(null);
+
+  const fetchDashboardData = async () => {
+    setIsLoading(true);
+    setErrorMessage(null);
+    try {
+      const [metricsRes, pcapRes, killChainRes] = await Promise.allSettled([
+        dashboardApi.getOverviewMetrics(),
+        dashboardApi.getPcapStats(),
+        dashboardApi.getKillChainDistribution(),
+      ]);
+
+      if (metricsRes.status === 'fulfilled') {
+        setMetrics(metricsRes.value);
+      }
+      if (pcapRes.status === 'fulfilled') {
+        setPcapStats(pcapRes.value);
+      }
+      if (killChainRes.status === 'fulfilled') {
+        setKillChain(killChainRes.value);
+      }
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'Unable to connect to FastAPI backend operational telemetry.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 300);
-    return () => clearTimeout(timer);
+    fetchDashboardData();
   }, []);
 
-  const criticalIncidents = incidents.filter(i => i.severity === 'Critical');
-  const highRiskIocs = iocs.filter(i => i.threatScore >= 85);
-  
+  const activeIncidentsCount = metrics?.activeIncidents ?? (incidents || []).length;
+  const criticalAlertsCount = metrics?.criticalAlerts ?? (incidents || []).filter(i => i.severity === 'Critical').length;
+  const analyzedPacketsCount = pcapStats?.totalPackets ?? metrics?.pcapMetrics?.totalPackets ?? (pcapSession?.totalPackets ?? 0);
+  const anomalyAlertsCount = pcapStats?.completedAnalyses ?? (pcapSession?.suspiciousDetections?.length ?? 0);
+  const trackedIocsCount = metrics?.totalIocsCataloged ?? metrics?.iocMetrics?.totalIocs ?? (iocs || []).length;
+  const highRiskIocsCount = metrics?.iocMetrics?.criticalIocs ?? (iocs || []).filter(i => i.threatScore >= 85).length;
+
   // Conditional Resume Investigation computation
   const activeCase = useMemo(() => {
-    const activeIncidents = incidents.filter(i => {
+    const activeIncidents = (incidents || []).filter(i => {
       const statusLower = (i.status || '').toLowerCase().trim();
       if (['completed', 'closed', 'mitigated', 'archived'].includes(statusLower)) {
         return false;
@@ -108,7 +143,7 @@ export const OverviewDashboard: React.FC<{ onOpenNewIncident: () => void }> = ({
       return true;
     });
 
-    if (activeIncidents.length === 0) return null;
+    if (!activeIncidents || activeIncidents.length === 0) return null;
 
     const selectedActive = activeIncidents.find(i => i.id === selectedIncidentId) || activeIncidents[0];
     if (!selectedActive) return null;
@@ -132,11 +167,12 @@ export const OverviewDashboard: React.FC<{ onOpenNewIncident: () => void }> = ({
 
   // Evidence Counts Summary
   const evidenceSummary = useMemo(() => {
-    const pcapCount = evidence.filter(e => e.category === 'PCAP Trace').length + (pcapSession ? 1 : 0);
-    const memoryCount = evidence.filter(e => e.category === 'Memory Dump').length;
-    const eventLogCount = evidence.filter(e => e.category === 'Event Log').length;
-    const diskImageCount = evidence.filter(e => e.category === 'Disk Image').length;
-    const otherCount = evidence.filter(e => e.category !== 'PCAP Trace' && e.category !== 'Memory Dump' && e.category !== 'Event Log' && e.category !== 'Disk Image').length;
+    const evList = evidence || [];
+    const pcapCount = (pcapStats?.totalPcapSessions ?? (evList.filter(e => e.category === 'PCAP Trace').length + (pcapSession?.id ? 1 : 0)));
+    const memoryCount = evList.filter(e => e.category === 'Memory Dump').length;
+    const eventLogCount = evList.filter(e => e.category === 'Event Log').length;
+    const diskImageCount = evList.filter(e => e.category === 'Disk Image').length;
+    const otherCount = evList.filter(e => e.category !== 'PCAP Trace' && e.category !== 'Memory Dump' && e.category !== 'Event Log' && e.category !== 'Disk Image').length;
 
     return [
       { type: 'PCAP Files', count: pcapCount, icon: Network, color: 'text-cyan-400 bg-cyan-950/60 border-cyan-800/80' },
@@ -145,7 +181,7 @@ export const OverviewDashboard: React.FC<{ onOpenNewIncident: () => void }> = ({
       { type: 'Disk Images', count: diskImageCount, icon: FileImage, color: 'text-blue-400 bg-blue-950/60 border-blue-800/80' },
       { type: 'Other Artifacts', count: otherCount, icon: Database, color: 'text-emerald-400 bg-emerald-950/60 border-emerald-800/80' },
     ];
-  }, [evidence, pcapSession]);
+  }, [evidence, pcapSession, pcapStats]);
 
   // Chronological Activity Feed
   const chronologicalActivity = useMemo(() => {
@@ -158,7 +194,6 @@ export const OverviewDashboard: React.FC<{ onOpenNewIncident: () => void }> = ({
       iconColor: string;
     }> = [];
 
-    // Add Timeline items from active case
     if (activeCase?.timeline) {
       activeCase.timeline.forEach((tl, idx) => {
         activities.push({
@@ -172,8 +207,7 @@ export const OverviewDashboard: React.FC<{ onOpenNewIncident: () => void }> = ({
       });
     }
 
-    // Add Evidence upload events
-    evidence.forEach((ev) => {
+    (evidence || []).forEach((ev) => {
       activities.push({
         id: `ev-act-${ev.id}`,
         timestamp: formatTimestamp(ev.uploadedAt),
@@ -184,8 +218,7 @@ export const OverviewDashboard: React.FC<{ onOpenNewIncident: () => void }> = ({
       });
     });
 
-    // Add Report events
-    reports.forEach((rep) => {
+    (reports || []).forEach((rep) => {
       activities.push({
         id: `rep-act-${rep.id}`,
         timestamp: formatTimestamp(rep.generatedAt),
@@ -196,20 +229,21 @@ export const OverviewDashboard: React.FC<{ onOpenNewIncident: () => void }> = ({
       });
     });
 
-    // Fallback if empty
-    if (activities.length === 0) {
-      activities.push(
-        { id: 'def-1', timestamp: 'Today • 11:20 AM', title: 'Report Generated', description: 'LockBit 3.0 DFIR Executive Report compiled.', icon: FileCheck2, iconColor: 'text-emerald-400 bg-emerald-950 border-emerald-800' },
-        { id: 'def-2', timestamp: 'Today • 11:12 AM', title: 'Evidence Tagged', description: 'DC01_lsass_memory_dump.dmp added to vault.', icon: HardDrive, iconColor: 'text-purple-400 bg-purple-950 border-purple-800' },
-        { id: 'def-3', timestamp: 'Today • 10:55 AM', title: 'IOCs Extracted', description: 'IP 185.220.101.5 identified with threat score 98.', icon: Fingerprint, iconColor: 'text-cyan-400 bg-cyan-950 border-cyan-800' },
-        { id: 'def-4', timestamp: 'Today • 10:47 AM', title: 'Packet Analysis Started', description: 'Deep packet inspection initiated on PCAP capture trace.', icon: Network, iconColor: 'text-blue-400 bg-blue-950 border-blue-800' },
-        { id: 'def-5', timestamp: 'Today • 10:40 AM', title: 'PCAP Uploaded', description: 'incident_capture_DC01_10.0.1.5.pcapng (248 KB) added.', icon: Network, iconColor: 'text-cyan-400 bg-cyan-950 border-cyan-800' },
-        { id: 'def-6', timestamp: 'Today • 10:35 AM', title: 'Case Created', description: 'Incident dockets INC-2026-8842 opened for investigation.', icon: ShieldAlert, iconColor: 'text-red-400 bg-red-950 border-red-800' }
-      );
+    if (pcapStats?.recentAnalyses) {
+      pcapStats.recentAnalyses.forEach((pa) => {
+        activities.push({
+          id: `pcap-act-${pa.id}`,
+          timestamp: formatTimestamp(pa.uploadTime),
+          title: 'PCAP Trace Dissected',
+          description: `${pa.filename} (${pa.packetCount} pkts) via ${pa.analysisEngine}`,
+          icon: Network,
+          iconColor: 'text-cyan-400 bg-cyan-950 border-cyan-800'
+        });
+      });
     }
 
     return activities.slice(0, 6);
-  }, [activeCase, evidence, reports]);
+  }, [activeCase, evidence, reports, pcapStats]);
 
   if (isLoading) {
     return (
@@ -223,13 +257,30 @@ export const OverviewDashboard: React.FC<{ onOpenNewIncident: () => void }> = ({
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto font-sans selection:bg-cyan-500 selection:text-black">
+      {/* Error Alert Container */}
+      {errorMessage && (
+        <div className="bg-red-950/80 border border-red-800 text-red-200 p-4 rounded-xl flex items-center justify-between text-xs font-sans">
+          <div className="flex items-center space-x-2">
+            <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+          <button
+            onClick={fetchDashboardData}
+            className="px-3 py-1 bg-red-900 hover:bg-red-800 text-white rounded font-bold flex items-center space-x-1 transition-colors cursor-pointer"
+          >
+            <RefreshCw className="w-3 h-3" />
+            <span>Retry Sync</span>
+          </button>
+        </div>
+      )}
+
       {/* 1. Welcome Section */}
       <div className="bg-gradient-to-r from-slate-900 via-slate-900 to-cyan-950/40 border border-slate-800 p-5 md:p-6 rounded-2xl shadow-xl flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div className="space-y-1.5">
           <div className="flex flex-wrap items-center gap-2">
             <span className="px-2.5 py-0.5 text-xs font-semibold bg-cyan-950 text-cyan-300 border border-cyan-800 rounded-full flex items-center space-x-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span>COMMAND CENTER ONLINE</span>
+              <span>FASTAPI LIVE OPERATIONAL TELEMETRY</span>
             </span>
             <span className="text-xs text-slate-400 font-mono">Role: {userProfile.role}</span>
           </div>
@@ -247,10 +298,10 @@ export const OverviewDashboard: React.FC<{ onOpenNewIncident: () => void }> = ({
         <div className="flex items-center space-x-3 bg-slate-950/90 p-3 rounded-xl border border-slate-800 text-xs font-sans shrink-0 shadow-inner">
           <ShieldAlert className="w-4 h-4 text-cyan-400" />
           <div>
-            <span className="text-slate-400 block text-[10px] uppercase font-semibold">DFIR Incident Engine</span>
+            <span className="text-slate-400 block text-[10px] uppercase font-semibold">DFIR Threat Level</span>
             <span className="text-emerald-400 font-bold flex items-center space-x-1">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span>System Status: Online</span>
+              <span>Status: {metrics?.threatLevel || 'Elevated'}</span>
             </span>
           </div>
         </div>
@@ -366,14 +417,14 @@ export const OverviewDashboard: React.FC<{ onOpenNewIncident: () => void }> = ({
           </div>
           <div className="mt-3 flex items-baseline justify-between">
             <span className="text-2xl font-bold text-slate-100 font-heading">
-              {incidents.length}
+              {activeIncidentsCount}
             </span>
             <span className="text-xs text-red-400 font-semibold">
-              {criticalIncidents.length} Critical
+              {criticalAlertsCount} Critical
             </span>
           </div>
           <p className="text-[11px] text-slate-500 mt-1 truncate">
-            Latest: <span className="font-mono">{incidents[0]?.incidentNumber || 'N/A'}</span>
+            Latest: <span className="font-mono">{incidents?.[0]?.incidentNumber || 'N/A'}</span>
           </p>
         </div>
 
@@ -392,14 +443,14 @@ export const OverviewDashboard: React.FC<{ onOpenNewIncident: () => void }> = ({
           </div>
           <div className="mt-3 flex items-baseline justify-between">
             <span className="text-2xl font-bold text-slate-100 font-heading">
-              {pcapSession.totalPackets}
+              {analyzedPacketsCount}
             </span>
             <span className="text-xs text-cyan-400 font-semibold">
-              {pcapSession.suspiciousDetections.length} Anomaly Alerts
+              {anomalyAlertsCount} Anomaly Alerts
             </span>
           </div>
           <p className="text-[11px] text-slate-500 mt-1 truncate">
-            Trace: <span className="font-mono">{pcapSession.filename}</span>
+            Trace: <span className="font-mono">{pcapStats?.recentAnalyses?.[0]?.filename || pcapSession?.filename || 'No Trace Loaded'}</span>
           </p>
         </div>
 
@@ -418,10 +469,10 @@ export const OverviewDashboard: React.FC<{ onOpenNewIncident: () => void }> = ({
           </div>
           <div className="mt-3 flex items-baseline justify-between">
             <span className="text-2xl font-bold text-slate-100 font-heading">
-              {iocs.length}
+              {trackedIocsCount}
             </span>
             <span className="text-xs text-purple-400 font-semibold">
-              {highRiskIocs.length} High Risk
+              {highRiskIocsCount} High Risk
             </span>
           </div>
           <p className="text-[11px] text-slate-500 mt-1 truncate font-sans">
@@ -444,7 +495,7 @@ export const OverviewDashboard: React.FC<{ onOpenNewIncident: () => void }> = ({
           </div>
           <div className="mt-3 flex items-baseline justify-between">
             <span className="text-2xl font-bold text-slate-100 font-heading">
-              {evidence.length}
+              {(evidence || []).length}
             </span>
             <span className="text-xs text-emerald-400 font-semibold">
               SHA-256 Verified
@@ -499,12 +550,12 @@ export const OverviewDashboard: React.FC<{ onOpenNewIncident: () => void }> = ({
               onClick={() => setActiveTab('incidents')}
               className="text-xs font-sans text-cyan-400 hover:text-cyan-300 flex items-center space-x-1"
             >
-              <span>View All ({incidents.length})</span>
+              <span>View All ({(incidents || []).length})</span>
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
 
-          {incidents.length === 0 ? (
+          {(!incidents || incidents.length === 0) ? (
             <EmptyState
               title="No Investigations Found"
               description="Click below to start a new investigation."
@@ -596,12 +647,12 @@ export const OverviewDashboard: React.FC<{ onOpenNewIncident: () => void }> = ({
             onClick={() => setActiveTab('evidence')}
             className="px-3 py-1.5 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded-lg text-xs font-bold text-cyan-400 hover:text-cyan-300 flex items-center space-x-1.5 transition-all"
           >
-            <span>View All Evidence ({evidence.length})</span>
+            <span>View All Evidence ({(evidence || []).length})</span>
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>
 
-        {evidence.length === 0 ? (
+        {(!evidence || evidence.length === 0) ? (
           <EmptyState
             title="No Evidence Uploaded"
             description="Upload PCAP, memory dumps, or log artifacts into the Evidence Vault."
@@ -683,12 +734,12 @@ export const OverviewDashboard: React.FC<{ onOpenNewIncident: () => void }> = ({
             onClick={() => setActiveTab('reports')}
             className="px-3 py-1.5 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded-lg text-xs font-bold text-cyan-400 hover:text-cyan-300 flex items-center space-x-1.5 transition-all"
           >
-            <span>View All Reports ({reports.length})</span>
+            <span>View All Reports ({(reports || []).length})</span>
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>
 
-        {reports.length === 0 ? (
+        {(!reports || reports.length === 0) ? (
           <EmptyState
             title="No Reports Generated"
             description="Compile a DFIR report from an active investigation case."

@@ -32,7 +32,8 @@ export const ContainmentModal: React.FC = () => {
     updateIncidentStatus,
     addTimelineEvent,
     addAnalystNote,
-    showToast
+    showToast,
+    userProfile
   } = useInvestigation();
 
   const [selectedAssetId, setSelectedAssetId] = useState<string>('');
@@ -208,7 +209,7 @@ export const ContainmentModal: React.FC = () => {
 
                 <div className="bg-slate-900 p-2 rounded-lg border border-slate-800">
                   <span className="text-[10px] text-slate-500 block uppercase">Assigned Analyst</span>
-                  <span className="text-cyan-300 font-bold truncate block">{selectedIncident?.assignedAnalyst || 'Alex Mercer'}</span>
+                  <span className="text-cyan-300 font-bold truncate block">{selectedIncident?.assignedAnalyst || userProfile.fullName || 'Lead DFIR Analyst'}</span>
                 </div>
               </div>
 
