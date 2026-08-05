@@ -70,9 +70,9 @@ class CaseService:
             updatedAt=case.updated_at.isoformat(),
         )
 
-    async def list_cases(self) -> List[CaseResponseSchema]:
+    async def list_cases(self, user_id: Optional[str] = None) -> List[CaseResponseSchema]:
         """List active non-deleted cases."""
-        cases = await self.cases_repo.list_active_cases()
+        cases = await self.cases_repo.list_active_cases(user_id=user_id)
         return [
             CaseResponseSchema(
                 id=c.id,

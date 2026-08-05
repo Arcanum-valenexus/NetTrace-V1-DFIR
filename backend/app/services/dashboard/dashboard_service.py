@@ -1,7 +1,8 @@
-from typing import Dict, Any, List
-from sqlalchemy import select, func, desc
+from typing import Dict, Any, List, Optional
+from sqlalchemy import select, func, desc, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.user import UserModel
 from app.models.incident import IncidentModel
 from app.models.evidence import EvidenceArtifactModel
 from app.models.pcap import PcapSessionModel, PacketModel
@@ -14,86 +15,141 @@ class DashboardService:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def get_overview_metrics(self) -> Dict[str, Any]:
-        """Calculates real live metrics from SQLite/PostgreSQL database."""
+    async def _get_user(self, user_id: Optional[str]) -> Optional[UserModel]:
+        if not user_id:
+            return None
+        res = await self.session.execute(select(UserModel).where(UserModel.id == user_id))
+        return res.scalars().first()
+
+    async def get_overview_metrics(self, user_id: Optional[str] = None) -> Dict[str, Any]:
+        """Calculates real live metrics from SQLite/PostgreSQL database filtered by user identity."""
+        user = await self._get_user(user_id)
+
         # Count active non-deleted incidents
-        incidents_result = await self.session.execute(
-            select(func.count()).select_from(IncidentModel).where(IncidentModel.is_deleted == False)
+        inc_query = select(func.count()).select_from(IncidentModel).where(IncidentModel.is_deleted == False)
+        crit_query = select(func.count()).select_from(IncidentModel).where(
+            IncidentModel.is_deleted == False,
+            IncidentModel.severity == "Critical"
         )
+        if user:
+            user_filters = [
+                IncidentModel.assigned_analyst == user.full_name,
+                IncidentModel.assigned_analyst == user.email
+            ]
+            if user.email and "@" in user.email:
+                user_filters.append(IncidentModel.assigned_analyst.contains(user.email.split("@")[0]))
+            inc_query = inc_query.where(or_(*user_filters))
+            crit_query = crit_query.where(or_(*user_filters))
+
+        incidents_result = await self.session.execute(inc_query)
         total_incidents = incidents_result.scalar_one() or 0
 
-        # Count critical incidents
-        critical_result = await self.session.execute(
-            select(func.count()).select_from(IncidentModel).where(
-                IncidentModel.is_deleted == False,
-                IncidentModel.severity == "Critical"
-            )
-        )
+        critical_result = await self.session.execute(crit_query)
         critical_alerts = critical_result.scalar_one() or 0
 
         # Count evidence artifacts
-        evidence_result = await self.session.execute(
-            select(func.count()).select_from(EvidenceArtifactModel).where(EvidenceArtifactModel.is_deleted == False)
-        )
+        ev_query = select(func.count()).select_from(EvidenceArtifactModel).where(EvidenceArtifactModel.is_deleted == False)
+        if user:
+            ev_query = ev_query.where(or_(
+                EvidenceArtifactModel.owner_investigator_id == user.id,
+                EvidenceArtifactModel.uploaded_by == user.email,
+                EvidenceArtifactModel.uploaded_by == user.full_name
+            ))
+        evidence_result = await self.session.execute(ev_query)
         evidence_count = evidence_result.scalar_one() or 0
 
         # Count completed PCAP sessions
-        pcap_count_res = await self.session.execute(
-            select(func.count()).select_from(PcapSessionModel).where(PcapSessionModel.status == "Completed")
-        )
+        pcap_query = select(func.count()).select_from(PcapSessionModel).where(PcapSessionModel.status == "Completed")
+        if user:
+            pcap_query = pcap_query.where(or_(
+                PcapSessionModel.uploaded_by == user.email,
+                PcapSessionModel.uploaded_by == user.full_name
+            ))
+        pcap_count_res = await self.session.execute(pcap_query)
         pcap_count = pcap_count_res.scalar_one() or 0
 
         # Count total IOCs
-        ioc_count_res = await self.session.execute(
-            select(func.count()).select_from(IOCModel).where(IOCModel.is_deleted == False)
-        )
+        ioc_query = select(func.count()).select_from(IOCModel).where(IOCModel.is_deleted == False)
+        if user:
+            ioc_query = ioc_query.where(or_(
+                IOCModel.source_session.in_(
+                    select(PcapSessionModel.id).where(or_(PcapSessionModel.uploaded_by == user.email, PcapSessionModel.uploaded_by == user.full_name))
+                ),
+                IOCModel.case_id.in_(
+                    select(EvidenceArtifactModel.case_id).where(EvidenceArtifactModel.owner_investigator_id == user.id)
+                ) if user.id else False
+            ))
+        ioc_count_res = await self.session.execute(ioc_query)
         ioc_count = ioc_count_res.scalar_one() or 0
 
         threat_level = "Critical" if critical_alerts > 0 else "Elevated" if total_incidents > 0 else "Normal"
-        pcap_metrics = await self.get_pcap_metrics()
-        ioc_metrics = await self.get_ioc_metrics()
+        pcap_metrics = await self.get_pcap_metrics(user_id=user_id)
+        ioc_metrics = await self.get_ioc_metrics(user_id=user_id)
 
         return {
-            "activeIncidents": total_incidents or 4,
-            "criticalAlerts": critical_alerts or 2,
-            "pcapsAnalyzed": pcap_count or 14,
-            "totalIocsCataloged": ioc_count or 128,
+            "activeIncidents": total_incidents,
+            "criticalAlerts": critical_alerts,
+            "pcapsAnalyzed": pcap_count,
+            "totalIocsCataloged": ioc_count,
             "threatLevel": threat_level,
             "pcapMetrics": pcap_metrics,
             "iocMetrics": ioc_metrics,
         }
 
-    async def get_pcap_metrics(self) -> Dict[str, Any]:
+    async def get_pcap_metrics(self, user_id: Optional[str] = None) -> Dict[str, Any]:
         """Calculates real-time database metrics for PCAP analysis sessions, packets, top protocols, and talkers."""
+        user = await self._get_user(user_id)
+
+        session_filter = [PcapSessionModel.id.isnot(None)]
+        if user:
+            session_filter.append(or_(
+                PcapSessionModel.uploaded_by == user.email,
+                PcapSessionModel.uploaded_by == user.full_name
+            ))
+
         # Total PCAP Sessions
-        res_sessions = await self.session.execute(select(func.count()).select_from(PcapSessionModel))
+        res_sessions = await self.session.execute(
+            select(func.count()).select_from(PcapSessionModel).where(*session_filter)
+        )
         total_sessions = res_sessions.scalar_one() or 0
 
         # Total Packets
-        res_packets = await self.session.execute(select(func.count()).select_from(PacketModel))
+        res_packets = await self.session.execute(
+            select(func.count()).select_from(PacketModel)
+            .join(PcapSessionModel, PacketModel.session_id == PcapSessionModel.id)
+            .where(*session_filter)
+        )
         total_packets = res_packets.scalar_one() or 0
 
         # Completed & Failed Sessions
         res_completed = await self.session.execute(
-            select(func.count()).select_from(PcapSessionModel).where(PcapSessionModel.status == "Completed")
+            select(func.count()).select_from(PcapSessionModel).where(PcapSessionModel.status == "Completed", *session_filter)
         )
         completed_analyses = res_completed.scalar_one() or 0
 
         res_failed = await self.session.execute(
-            select(func.count()).select_from(PcapSessionModel).where(PcapSessionModel.status == "Failed")
+            select(func.count()).select_from(PcapSessionModel).where(PcapSessionModel.status == "Failed", *session_filter)
         )
         failed_analyses = res_failed.scalar_one() or 0
 
         # Averages
-        res_avg_size = await self.session.execute(select(func.avg(PacketModel.packet_length)))
+        res_avg_size = await self.session.execute(
+            select(func.avg(PacketModel.packet_length))
+            .join(PcapSessionModel, PacketModel.session_id == PcapSessionModel.id)
+            .where(*session_filter)
+        )
         avg_size = round(res_avg_size.scalar_one() or 0.0, 1)
 
-        res_avg_dur = await self.session.execute(select(func.avg(PcapSessionModel.duration_seconds)))
+        res_avg_dur = await self.session.execute(
+            select(func.avg(PcapSessionModel.duration_seconds)).where(*session_filter)
+        )
         avg_duration = round(res_avg_dur.scalar_one() or 0.0, 1)
 
         # Top Protocols
         res_top_proto = await self.session.execute(
             select(PacketModel.protocol, func.count(PacketModel.id).label("cnt"))
+            .join(PcapSessionModel, PacketModel.session_id == PcapSessionModel.id)
+            .where(*session_filter)
             .group_by(PacketModel.protocol)
             .order_by(desc("cnt"))
             .limit(5)
@@ -107,7 +163,8 @@ class DashboardService:
         # Top Source IPs
         res_top_src = await self.session.execute(
             select(PacketModel.source_ip, func.count(PacketModel.id).label("cnt"))
-            .where(PacketModel.source_ip != "0.0.0.0")
+            .join(PcapSessionModel, PacketModel.session_id == PcapSessionModel.id)
+            .where(PacketModel.source_ip != "0.0.0.0", *session_filter)
             .group_by(PacketModel.source_ip)
             .order_by(desc("cnt"))
             .limit(5)
@@ -117,7 +174,8 @@ class DashboardService:
         # Top Destination IPs
         res_top_dst = await self.session.execute(
             select(PacketModel.destination_ip, func.count(PacketModel.id).label("cnt"))
-            .where(PacketModel.destination_ip != "0.0.0.0")
+            .join(PcapSessionModel, PacketModel.session_id == PcapSessionModel.id)
+            .where(PacketModel.destination_ip != "0.0.0.0", *session_filter)
             .group_by(PacketModel.destination_ip)
             .order_by(desc("cnt"))
             .limit(5)
@@ -126,9 +184,20 @@ class DashboardService:
 
         # Recent Analyses
         res_recent = await self.session.execute(
-            select(PcapSessionModel).order_by(PcapSessionModel.created_at.desc()).limit(5)
+            select(
+                PcapSessionModel.id,
+                PcapSessionModel.filename,
+                PcapSessionModel.status,
+                PcapSessionModel.packet_count,
+                PcapSessionModel.duration_seconds,
+                PcapSessionModel.analysis_engine,
+                PcapSessionModel.upload_time,
+            )
+            .where(*session_filter)
+            .order_by(PcapSessionModel.created_at.desc())
+            .limit(5)
         )
-        recent_sessions = res_recent.scalars().all()
+        recent_sessions = res_recent.all()
         recent_analyses = [
             {
                 "id": s.id,
@@ -155,35 +224,51 @@ class DashboardService:
             "recentAnalyses": recent_analyses,
         }
 
-    async def get_ioc_metrics(self) -> Dict[str, Any]:
+    async def get_ioc_metrics(self, user_id: Optional[str] = None) -> Dict[str, Any]:
         """Calculates real-time database metrics for IOC Intelligence Desk."""
-        res_total = await self.session.execute(select(func.count()).select_from(IOCModel).where(IOCModel.is_deleted == False))
+        user = await self._get_user(user_id)
+        ioc_filters = [IOCModel.is_deleted == False]
+        if user:
+            user_session_ids_subq = select(PcapSessionModel.id).where(
+                or_(
+                    PcapSessionModel.uploaded_by == user.email,
+                    PcapSessionModel.uploaded_by == user.full_name
+                )
+            )
+            ioc_filters.append(
+                or_(
+                    IOCModel.source_session.in_(user_session_ids_subq),
+                    IOCModel.deleted_by == user.id
+                )
+            )
+
+        res_total = await self.session.execute(select(func.count()).select_from(IOCModel).where(*ioc_filters))
         total_iocs = res_total.scalar_one() or 0
 
         res_critical = await self.session.execute(
-            select(func.count()).select_from(IOCModel).where(IOCModel.is_deleted == False, IOCModel.severity == "Critical")
+            select(func.count()).select_from(IOCModel).where(*ioc_filters, IOCModel.severity == "Critical")
         )
         critical_iocs = res_critical.scalar_one() or 0
 
         res_high = await self.session.execute(
-            select(func.count()).select_from(IOCModel).where(IOCModel.is_deleted == False, IOCModel.severity == "High")
+            select(func.count()).select_from(IOCModel).where(*ioc_filters, IOCModel.severity == "High")
         )
         high_iocs = res_high.scalar_one() or 0
 
         res_med = await self.session.execute(
-            select(func.count()).select_from(IOCModel).where(IOCModel.is_deleted == False, IOCModel.severity == "Medium")
+            select(func.count()).select_from(IOCModel).where(*ioc_filters, IOCModel.severity == "Medium")
         )
         medium_iocs = res_med.scalar_one() or 0
 
         res_low = await self.session.execute(
-            select(func.count()).select_from(IOCModel).where(IOCModel.is_deleted == False, IOCModel.severity == "Low")
+            select(func.count()).select_from(IOCModel).where(*ioc_filters, IOCModel.severity == "Low")
         )
         low_iocs = res_low.scalar_one() or 0
 
         # Type breakdown
         res_types = await self.session.execute(
             select(IOCModel.type, func.count(IOCModel.id).label("cnt"))
-            .where(IOCModel.is_deleted == False)
+            .where(*ioc_filters)
             .group_by(IOCModel.type)
         )
         ioc_types = {t: c for t, c in res_types.all()}
@@ -191,7 +276,7 @@ class DashboardService:
         # Category breakdown
         res_cats = await self.session.execute(
             select(IOCModel.category, func.count(IOCModel.id).label("cnt"))
-            .where(IOCModel.is_deleted == False)
+            .where(*ioc_filters)
             .group_by(IOCModel.category)
             .order_by(desc("cnt"))
             .limit(5)
@@ -200,7 +285,7 @@ class DashboardService:
 
         # Recent IOCs
         res_recent = await self.session.execute(
-            select(IOCModel).where(IOCModel.is_deleted == False).order_by(IOCModel.created_at.desc()).limit(5)
+            select(IOCModel).where(*ioc_filters).order_by(IOCModel.created_at.desc()).limit(5)
         )
         recent_iocs_objs = res_recent.scalars().all()
         recent_iocs = [
@@ -227,25 +312,27 @@ class DashboardService:
             "recentIocs": recent_iocs,
         }
 
-    async def get_kill_chain_distribution(self) -> Dict[str, int]:
-        """Calculates Kill Chain stage distribution."""
-        result = await self.session.execute(
-            select(IncidentModel.current_stage, func.count(IncidentModel.id))
-            .where(IncidentModel.is_deleted == False)
-            .group_by(IncidentModel.current_stage)
-        )
+    async def get_kill_chain_distribution(self, user_id: Optional[str] = None) -> Dict[str, int]:
+        """Calculates Kill Chain stage distribution for current user."""
+        user = await self._get_user(user_id)
+
+        inc_query = select(IncidentModel.current_stage, func.count(IncidentModel.id)).where(IncidentModel.is_deleted == False)
+        if user:
+            user_filters = [
+                IncidentModel.assigned_analyst == user.full_name,
+                IncidentModel.assigned_analyst == user.email
+            ]
+            if user.email and "@" in user.email:
+                user_filters.append(IncidentModel.assigned_analyst.contains(user.email.split("@")[0]))
+            inc_query = inc_query.where(or_(*user_filters))
+
+        result = await self.session.execute(inc_query.group_by(IncidentModel.current_stage))
         distribution = {stage: count for stage, count in result.all()}
         
-        default_stages = {
-            "Initial Access": 2,
-            "Execution": 4,
-            "Privilege Escalation": 3,
-            "Lateral Movement": 1,
-            "Impact": 1
-        }
-        
-        for k, v in default_stages.items():
-            if k not in distribution:
-                distribution[k] = v
+        all_stages = ["Initial Access", "Execution", "Privilege Escalation", "Lateral Movement", "Impact"]
+        for stage in all_stages:
+            if stage not in distribution:
+                distribution[stage] = 0
 
         return distribution
+

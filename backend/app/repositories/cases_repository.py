@@ -18,9 +18,11 @@ class CasesRepository(BaseRepository[CaseModel]):
         )
         return result.scalars().first()
 
-    async def list_active_cases(self, skip: int = 0, limit: int = 100) -> List[CaseModel]:
+    async def list_active_cases(self, user_id: Optional[str] = None, skip: int = 0, limit: int = 100) -> List[CaseModel]:
         """List active non-deleted cases."""
-        result = await self.session.execute(
-            select(CaseModel).where(CaseModel.is_deleted == False).offset(skip).limit(limit)
-        )
+        query = select(CaseModel).where(CaseModel.is_deleted == False)
+        if user_id:
+            query = query.where(CaseModel.created_by == user_id)
+        result = await self.session.execute(query.offset(skip).limit(limit))
         return list(result.scalars().all())
+

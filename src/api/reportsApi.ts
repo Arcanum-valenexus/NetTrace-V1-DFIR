@@ -1,4 +1,4 @@
-import { apiClient } from './apiClient';
+import { apiClient, getAccessToken } from './apiClient';
 
 export interface ForensicsReportRecord {
   id: string;
@@ -66,4 +66,30 @@ export const reportsApi = {
       body: JSON.stringify({ revisionReason }),
     });
   },
+
+  downloadReportPdf: async (reportId: string): Promise<void> => {
+    const token = getAccessToken();
+    const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+    const response = await fetch(`${API_BASE}/reports/${reportId}/pdf`, {
+      method: 'GET',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to download PDF report (Status: ${response.status})`);
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `DFIR_Report_${reportId}.pdf`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.URL.revokeObjectURL(url);
+  },
 };
+

@@ -16,7 +16,7 @@ async def get_metrics(
 ):
     """Calculates real live security operational metrics from PostgreSQL database."""
     dashboard_service = DashboardService(db)
-    metrics = await dashboard_service.get_overview_metrics()
+    metrics = await dashboard_service.get_overview_metrics(user_id=token_data.sub)
     return ResponseEnvelope(success=True, data=metrics)
 
 
@@ -27,7 +27,7 @@ async def get_pcap_stats(
 ):
     """Queries live PCAP forensic sessions, total packet counts, top protocols, top talkers, and size statistics."""
     dashboard_service = DashboardService(db)
-    stats = await dashboard_service.get_pcap_metrics()
+    stats = await dashboard_service.get_pcap_metrics(user_id=token_data.sub)
     return ResponseEnvelope(success=True, data=stats)
 
 
@@ -38,5 +38,6 @@ async def get_kill_chain(
 ):
     """Queries Kill Chain stage distribution chart data."""
     dashboard_service = DashboardService(db)
-    distribution = await dashboard_service.get_kill_chain_distribution()
+    distribution = await dashboard_service.get_kill_chain_distribution(user_id=token_data.sub)
     return ResponseEnvelope(success=True, data=distribution)
+

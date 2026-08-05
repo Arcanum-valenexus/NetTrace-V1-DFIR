@@ -39,6 +39,7 @@ import { useInvestigation, ActiveTab } from '../../context/InvestigationContext'
 import { ForensicsReport, ModuleStatusInfo } from '../../types';
 import { EmptyState } from '../common/EmptyState';
 import { NetTraceLogo } from '../common/NetTraceLogo';
+import { reportsApi } from '../../api/reportsApi';
 
 /**
  * Deterministic Web Crypto SHA-256 Hash Calculator for Forensic Reports.
@@ -467,10 +468,12 @@ ${activeReport.appendix || 'Adheres to NIST SP 800-61 Rev 2 guidelines.'}
       anchor.remove();
       showToast(`Exported forensics_report_${activeReport.reportNumber || activeReport.id}_v${activeReport.version || 1}.md`, 'success');
     } else if (type === 'pdf') {
-      showToast('Generating official DFIR PDF report layout...', 'info');
-      window.print();
+      showToast('Generating official DFIR PDF report document...', 'info');
+      reportsApi.downloadReportPdf(activeReport.id)
+        .then(() => showToast('PDF report downloaded successfully.', 'success'))
+        .catch(err => showToast(err?.message || 'Failed to download PDF report', 'error'));
     } else if (type === 'print') {
-      showToast('Opening browser print dialog...', 'info');
+      showToast('Opening print dialog for DFIR report...', 'info');
       window.print();
     } else if (type === 'json') {
       const exportPayload = {

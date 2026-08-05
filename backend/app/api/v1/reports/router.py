@@ -1,5 +1,5 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, status, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -50,6 +50,22 @@ async def get_report(
     return ResponseEnvelope(success=True, data=report)
 
 
+@router.get("/{report_id}/pdf", summary="Download DFIR PDF Report")
+async def download_report_pdf(
+    report_id: str,
+    token_data: TokenData = Depends(require_permissions([PermissionEnum.CASES_READ])),
+    db: AsyncSession = Depends(get_db)
+):
+    """Generates and streams a downloadable PDF file for a forensics report."""
+    report_service = ReportService(db)
+    pdf_bytes = await report_service.generate_report_pdf(report_id)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=DFIR_Report_{report_id}.pdf"}
+    )
+
+
 @router.post("/{report_id}/revision", response_model=ResponseEnvelope[ForensicsReportResponse], summary="Create Report Revision")
 async def create_revision(
     report_id: str,
@@ -61,3 +77,4 @@ async def create_revision(
     report_service = ReportService(db)
     revision = await report_service.create_revision(report_id, payload.get("revisionReason", "Updated report findings"), actor_id=token_data.sub)
     return ResponseEnvelope(success=True, data=revision)
+

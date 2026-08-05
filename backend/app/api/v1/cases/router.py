@@ -19,7 +19,7 @@ async def list_cases(
 ):
     """Queries active cases."""
     case_service = CaseService(db)
-    cases = await case_service.list_cases()
+    cases = await case_service.list_cases(user_id=token_data.sub)
     return ResponseEnvelope(success=True, data=cases)
 
 

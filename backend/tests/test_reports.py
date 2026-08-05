@@ -34,9 +34,16 @@ async def test_reports_generation_and_revision():
         assert get_res.status_code == 200
         assert get_res.json()["data"]["id"] == rep_id
 
+        # Download PDF report
+        pdf_res = await client.get(f"/api/v1/reports/{rep_id}/pdf", headers=headers)
+        assert pdf_res.status_code == 200
+        assert pdf_res.headers["content-type"] == "application/pdf"
+        assert b"%PDF-1.4" in pdf_res.content
+
         # Create revision
         rev_res = await client.post(f"/api/v1/reports/{rep_id}/revision", json={
             "revisionReason": "Included new C2 findings"
         }, headers=headers)
         assert rev_res.status_code == 200
         assert rev_res.json()["data"]["version"] == 2
+

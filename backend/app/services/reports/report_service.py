@@ -240,3 +240,11 @@ class ReportService:
             )
 
             return await self.get_report_by_id(report_id)
+
+    async def generate_report_pdf(self, report_id: str) -> bytes:
+        """Generates downloadable PDF byte stream for a forensics report."""
+        report_response = await self.get_report_by_id(report_id)
+        report_dict = report_response.model_dump()
+        from app.utils.pdf_generator import generate_dfir_report_pdf
+        return generate_dfir_report_pdf(report_dict)
+

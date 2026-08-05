@@ -25,14 +25,6 @@ import {
   NotificationPreferencesMap
 } from '../types';
 
-import { 
-  initialIncidents, 
-  samplePcapSession, 
-  initialIocs, 
-  initialEvidence, 
-  initialReports, 
-  initialThreatActors 
-} from '../data/mockData';
 import { authApi } from '../api/authApi';
 import { casesApi, CaseRecord, CaseCreatePayload, CaseUpdatePayload } from '../api/casesApi';
 import { incidentsApi } from '../api/incidentsApi';
@@ -40,7 +32,7 @@ import { evidenceApi, EvidenceArtifactRecord } from '../api/evidenceApi';
 import { pcapApi, PcapSessionRecord, PacketRecord } from '../api/pcapApi';
 import { iocApi, IOCRecord } from '../api/iocApi';
 import { reportsApi, ForensicsReportRecord } from '../api/reportsApi';
-import { setAuthTokens, clearAuthTokens, getAccessToken, getRefreshToken } from '../api/apiClient';
+import { setAuthTokens, clearAuthTokens, getAccessToken, getRefreshToken, apiClient } from '../api/apiClient';
 
 export type { ActiveTab } from '../types';
 export type AppTheme = 'cyber-dark' | 'light' | 'high-contrast' | 'system';
@@ -143,10 +135,10 @@ interface InvestigationContextType {
 }
 
 const defaultUserProfile: UserProfile = {
-  id: 'usr-alex-01',
-  fullName: 'Lead DFIR Analyst',
-  email: 'analyst@nettrace.security',
-  phone: '+1 (555) 019-2834',
+  id: '',
+  fullName: 'DFIR Investigator',
+  email: '',
+  phone: '',
   organization: 'Cyber Defense & Forensics Labs',
   role: 'Lead DFIR Investigator',
   experienceLevel: '8+ Years Experience',
@@ -690,7 +682,7 @@ export const InvestigationProvider: React.FC<{ children: React.ReactNode }> = ({
       fetchReports();
     }
   }, [isAuthenticated]);
-  const [threatActors] = useState<ThreatActor[]>(initialThreatActors);
+  const [threatActors] = useState<ThreatActor[]>([]);
   
   const [globalSearch, setGlobalSearch] = useState<string>('');
   const [isContainmentModalOpen, setIsContainmentModalOpen] = useState<boolean>(false);
@@ -723,6 +715,33 @@ export const InvestigationProvider: React.FC<{ children: React.ReactNode }> = ({
     return null;
   };
 
+  const fetchUserProfile = async () => {
+    try {
+      const liveProfile = await apiClient<any>('/profile/me');
+      if (liveProfile) {
+        setUserProfile(prev => {
+          const updated = {
+            ...prev,
+            ...liveProfile,
+            fullName: liveProfile.fullName || prev.fullName,
+            email: liveProfile.email || prev.email,
+            role: liveProfile.role || prev.role,
+          };
+          saveUserProfile(updated);
+          return updated;
+        });
+      }
+    } catch (err) {
+      console.warn('Failed to fetch user profile from backend /profile/me', err);
+    }
+  };
+
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      fetchUserProfile();
+    }
+  }, [isAuthenticated]);
+
   // Auto-authenticate if valid JWT token is present on mount
   React.useEffect(() => {
     const token = getAccessToken();
@@ -736,6 +755,7 @@ export const InvestigationProvider: React.FC<{ children: React.ReactNode }> = ({
       setAppFlowStage('authenticated');
     }
   }, []);
+
 
   const loginUser = async (emailStr: string, passwordStr?: string, explicitName?: string) => {
     try {
