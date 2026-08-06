@@ -21,7 +21,7 @@ def upgrade() -> None:
         sa.Column('id', sa.String(length=36), nullable=False),
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
-        sa.Column('is_deleted', sa.Boolean(), nullable=False, server_default='0'),
+        sa.Column('is_deleted', sa.Boolean(), nullable=False, server_default='false'),
         sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('deleted_by', sa.String(length=255), nullable=True),
         sa.Column('type', sa.String(length=50), nullable=False),

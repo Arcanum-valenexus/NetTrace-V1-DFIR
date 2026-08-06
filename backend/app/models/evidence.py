@@ -1,5 +1,5 @@
 from typing import List, Optional
-from sqlalchemy import String, Text, BigInteger, ForeignKey, JSON
+from sqlalchemy import String, Text, BigInteger, Float, ForeignKey, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, BaseModelMixin, SoftDeleteMixin
 
@@ -25,7 +25,7 @@ class EvidenceArtifactModel(Base, BaseModelMixin, SoftDeleteMixin):
     analysis_status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     analysis_engine: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     packet_count: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
-    capture_duration: Mapped[Optional[float]] = mapped_column(Text, nullable=True) # or Float
+    capture_duration: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     top_protocols: Mapped[Optional[list]] = mapped_column(JSON, default=list)
     analysis_summary: Mapped[Optional[dict]] = mapped_column(JSON, default=dict)
     analysis_completed_at: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
