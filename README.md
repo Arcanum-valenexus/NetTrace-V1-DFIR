@@ -62,7 +62,7 @@ NetRace is a Python-powered Network Forensics and Incident Reconstruction platfo
 - TShark (Wireshark Engine)
 
 ### Database
-- MongoDB
+- SQL
 
 ---
 ## 🔄 NetRace Analysis Workflow
@@ -125,12 +125,6 @@ flowchart TD
 - PDF report export
 - Multi-user collaboration
 - Real-time monitoring
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License.
 
 ---
 
