@@ -82,8 +82,8 @@ export const PcapAnalyzer: React.FC = () => {
       const file = e.target.files[0];
       try {
         await uploadRealPcapFile(file);
-      } catch {
-        uploadCustomPcap(file.name, 32);
+      } catch (err: any) {
+        console.error('Failed to ingest real PCAP:', err);
       }
     }
   };
@@ -95,8 +95,8 @@ export const PcapAnalyzer: React.FC = () => {
       const file = e.dataTransfer.files[0];
       try {
         await uploadRealPcapFile(file);
-      } catch {
-        uploadCustomPcap(file.name, 32);
+      } catch (err: any) {
+        console.error('Failed to ingest real PCAP:', err);
       }
     }
   };
@@ -636,10 +636,10 @@ ${(pcapSession?.extractedFiles || []).map(f => ` - ${f.filename} (${f.sizeBytes}
         {filteredPackets.length === 0 ? (
           <EmptyState
             icon={Search}
-            title="No Packets Match Filter"
-            description={`No network frames found matching query "${pcapFilter}".`}
-            actionLabel="Clear Filter"
-            onAction={() => setPcapFilter('')}
+            title={(pcapSession?.packets || []).length === 0 ? "No Packets Available" : "No Packets Match Filter"}
+            description={(pcapSession?.packets || []).length === 0 ? "Upload a PCAP trace file (.pcap, .pcapng) to analyze real network packets." : `No network frames found matching query "${pcapFilter}".`}
+            actionLabel={pcapFilter ? "Clear Filter" : undefined}
+            onAction={pcapFilter ? () => setPcapFilter('') : undefined}
           />
         ) : (
           <div className="overflow-x-auto rounded-xl border border-slate-800 shadow-inner">

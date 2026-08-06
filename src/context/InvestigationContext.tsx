@@ -1169,8 +1169,8 @@ export const InvestigationProvider: React.FC<{ children: React.ReactNode }> = ({
           info: p.info || '',
           threatRating: (p.info || '').toLowerCase().includes('exploit') || (p.info || '').toLowerCase().includes('c2') || (p.info || '').toLowerCase().includes('malicious') ? 'Malicious' : 'Benign',
           flags: p.tcpFlags ? [p.tcpFlags] : ['ACK'],
-          payloadHex: (p as any).payloadHex || (p as any).payload_hex || '45 00 00 3c a2 11 40 00 40 06 ... Scapy Dissected Payload',
-          asciiStream: (p as any).payloadAscii || (p as any).payload_ascii || p.info || `[Dissected ${p.protocol} Packet #${p.packetNumber}]`
+          payloadHex: p.payloadHex || (p as any).payload_hex || '',
+          asciiStream: p.payloadAscii || (p as any).payload_ascii || p.info || ''
         }));
 
         setPcapSession(prev => ({
@@ -1182,14 +1182,16 @@ export const InvestigationProvider: React.FC<{ children: React.ReactNode }> = ({
           durationSeconds: sessionDetails?.durationSeconds || prev.durationSeconds,
           packets: mappedPackets,
           topProtocols: sessionDetails?.topProtocols ? sessionDetails.topProtocols.map(tp => ({
-            protocol: tp.name,
-            percentage: tp.percentage,
-            packetCount: tp.count
+            name: tp.name || (tp as any).protocol || 'Unknown',
+            percentage: tp.percentage || 0,
+            count: tp.count || (tp as any).packetCount || 0
           })) : prev.topProtocols
         }));
 
         if (mappedPackets.length > 0) {
           setSelectedPacket(mappedPackets[0]);
+        } else {
+          setSelectedPacket(null);
         }
       }
     } catch (err) {
@@ -1198,17 +1200,49 @@ export const InvestigationProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const uploadRealPcapFile = async (file: File, caseIdInput?: string, incidentIdInput?: string): Promise<void> => {
-    const targetCaseId = caseIdInput || cases[0]?.id || selectedIncident?.caseId;
-    const targetIncidentId = incidentIdInput || selectedIncident?.id || incidents[0]?.id;
+    let targetCaseId = caseIdInput || cases[0]?.id || selectedIncident?.caseId;
+    let targetIncidentId = incidentIdInput || selectedIncident?.id || incidents[0]?.id;
 
-    if (!cases || cases.length === 0 || !targetCaseId) {
-      const errorMsg = 'Please create a Case before uploading a PCAP.';
-      showToast(errorMsg, 'error');
-      throw new Error(errorMsg);
+    if (!targetCaseId) {
+      try {
+        const liveCases = await casesApi.getCases();
+        if (liveCases && liveCases.length > 0) {
+          targetCaseId = liveCases[0].id;
+          setCases(liveCases);
+        } else {
+          const newCase = await casesApi.createCase({ title: 'Default DFIR PCAP Case', priority: 'High' });
+          targetCaseId = newCase.id;
+          setCases([newCase]);
+        }
+      } catch (e) {
+        console.warn('Auto case creation failed:', e);
+      }
     }
 
-    if (!incidents || incidents.length === 0 || !targetIncidentId) {
-      const errorMsg = 'Please create an Incident before uploading a PCAP.';
+    if (!targetIncidentId) {
+      try {
+        const liveIncidents = await incidentsApi.getIncidents();
+        if (liveIncidents && liveIncidents.length > 0) {
+          targetIncidentId = liveIncidents[0].id;
+          setIncidents(liveIncidents as any);
+        } else {
+          const newInc = await incidentsApi.createIncident({
+            title: 'PCAP Ingestion Workbench Incident',
+            severity: 'High',
+            category: 'Network Intrusion',
+            assignedAnalyst: userProfile.fullName || 'Lead DFIR Investigator',
+            summary: 'Auto-created incident for PCAP analysis session.'
+          });
+          targetIncidentId = newInc.id;
+          setIncidents([newInc] as any);
+        }
+      } catch (e) {
+        console.warn('Auto incident creation failed:', e);
+      }
+    }
+
+    if (!targetCaseId || !targetIncidentId) {
+      const errorMsg = 'Failed to initialize active Case ID or Incident ID for PCAP upload.';
       showToast(errorMsg, 'error');
       throw new Error(errorMsg);
     }
@@ -1239,60 +1273,10 @@ export const InvestigationProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [isAuthenticated]);
 
   const uploadCustomPcap = (filename: string, packetCount = 24) => {
-    const newPackets: Packet[] = Array.from({ length: packetCount }, (_, i) => {
-      const isEvil = i % 3 === 0;
-      return {
-        packetNo: i + 1,
-        timestamp: `14:30:${(10 + i).toString().padStart(2, '0')}.102400`,
-        srcIp: isEvil ? '185.220.101.5' : `10.0.1.${10 + i}`,
-        srcPort: 49152 + i * 2,
-        destIp: isEvil ? '10.0.1.5' : '10.0.0.1',
-        destPort: isEvil ? 443 : 80,
-        protocol: isEvil ? 'HTTP' : i % 2 === 0 ? 'TCP' : 'DNS',
-        length: 128 + i * 42,
-        info: isEvil ? `POST /c2/beacon?id=${i} HTTP/1.1` : `TCP SYN/ACK Session #${i}`,
-        threatRating: isEvil ? 'Malicious' : 'Benign',
-        flags: ['PSH', 'ACK'],
-        payloadHex: '45 00 00 3c a2 11 40 00 40 06 ... custom pcap payload stream',
-        asciiStream: isEvil ? `POST /c2/beacon HTTP/1.1\nHost: c2-node.net\nData: payload_${i}` : `[Standard TCP Traffic Packet #${i + 1}]`
-      };
-    });
-
-    const newPcapSession: PcapSession = {
-      id: `pcap-${Date.now()}`,
-      filename,
-      uploadedAt: new Date().toISOString(),
-      totalPackets: packetCount,
-      durationSeconds: 180,
-      fileSizeBytes: packetCount * 1200,
-      packets: newPackets,
-      topProtocols: [
-        { name: 'TCP', count: Math.floor(packetCount * 0.5), percentage: 50 },
-        { name: 'HTTP', count: Math.floor(packetCount * 0.3), percentage: 30 },
-        { name: 'DNS', count: Math.floor(packetCount * 0.2), percentage: 20 }
-      ],
-      suspiciousDetections: [
-        {
-          title: 'Custom PCAP Malware Stager Detection',
-          severity: 'High',
-          description: `Analyzed ${filename}. Detected potential reverse shell connection.`,
-          packetIndex: 1
-        }
-      ],
-      extractedFiles: [
-        {
-          filename: 'extracted_binary.exe',
-          sizeBytes: 1048576,
-          mimeType: 'application/x-dsexec',
-          md5: '88a329182390a01290312013912a',
-          sha256: 'a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0',
-          verdict: 'Malicious'
-        }
-      ]
-    };
-
-    setPcapSession(newPcapSession);
-    setSelectedPacket(newPackets[0]);
+    // Legacy helper kept for signature compatibility - triggers real session fetch if active
+    if (pcapSession.id) {
+      fetchSessionPackets(pcapSession.id);
+    }
   };
 
   const addIoc = (iocData: Omit<IOC, 'id' | 'firstSeen' | 'lastSeen'>) => {

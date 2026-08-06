@@ -69,8 +69,8 @@ export const reportsApi = {
 
   downloadReportPdf: async (reportId: string): Promise<void> => {
     const token = getAccessToken();
-    const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api/v1';
-    const response = await fetch(`${API_BASE}/reports/${reportId}/pdf`, {
+    const { API_BASE_URL } = await import('./apiClient');
+    const response = await fetch(`${API_BASE_URL}/reports/${reportId}/pdf`, {
       method: 'GET',
       headers: {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),

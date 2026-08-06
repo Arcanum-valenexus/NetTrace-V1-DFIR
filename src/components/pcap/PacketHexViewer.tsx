@@ -23,29 +23,17 @@ interface HexRow {
 
 function generateHexDump(packet: Packet): HexRow[] {
   let rawHex = packet.payloadHex || '';
-  if (!rawHex || rawHex.length < 32) {
-    const strToHex = (str: string) => {
-      let hex = '';
-      for (let i = 0; i < str.length; i++) {
-        hex += str.charCodeAt(i).toString(16).padStart(2, '0');
-      }
-      return hex;
-    };
-    
-    let mockPayload = `POST /api/v1/telemetry HTTP/1.1\r\nHost: ${packet.destIp}\r\nUser-Agent: NetTrace-DPI/1.0\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\n${packet.info}`;
-    if (packet.dnsQuery) mockPayload = `DNS Query: ${packet.dnsQuery} Type A Class IN (Transaction 0x3f2a)`;
-    if (packet.asciiStream) mockPayload = packet.asciiStream;
-
-    rawHex = '4500003ca211400040067c92' + 
-      ipToHex(packet.srcIp) + 
-      ipToHex(packet.destIp) + 
-      portToHex(packet.srcPort) + 
-      portToHex(packet.destPort) + 
-      '00000001000000015018ffff0000' + 
-      strToHex(mockPayload);
+  if (!rawHex && packet.asciiStream) {
+    let hex = '';
+    for (let i = 0; i < packet.asciiStream.length; i++) {
+      hex += packet.asciiStream.charCodeAt(i).toString(16).padStart(2, '0');
+    }
+    rawHex = hex;
   }
 
   const cleanHex = rawHex.replace(/[^0-9a-fA-F]/g, '');
+  if (!cleanHex) return [];
+
   const rows: HexRow[] = [];
   
   for (let i = 0; i < cleanHex.length; i += 32) {
@@ -327,24 +315,24 @@ export const PacketHexViewer: React.FC<{ packet: Packet; onClose?: () => void }>
                     <>
                       <div>• Transaction ID: <span className="text-amber-300 font-mono">0x3f2a</span></div>
                       <div>• Flags: <span className="text-slate-100 font-mono">0x0100 Standard Query</span></div>
-                      <div>• Query Name: <span className="text-cyan-300 font-mono font-bold">{packet.dnsQuery || 'c2-beacon.darknet-cyber.com'}</span></div>
+                      <div>• Query Name: <span className="text-cyan-300 font-mono font-bold">{packet.dnsQuery || packet.info || 'DNS Query'}</span></div>
                       <div>• Query Type: <span className="text-slate-100 font-mono">A (Host Address)</span></div>
                     </>
                   )}
                   {isHttp && (
                     <>
-                      <div>• Method: <span className="text-cyan-400 font-mono font-bold">{packet.httpMethod || 'POST'}</span></div>
-                      <div>• Request URI: <span className="text-slate-100 font-mono">{packet.httpUrl || '/api/v1/telemetry'}</span></div>
+                      <div>• Method: <span className="text-cyan-400 font-mono font-bold">{packet.httpMethod || 'GET/POST'}</span></div>
+                      <div>• Request URI: <span className="text-slate-100 font-mono">{packet.httpUrl || packet.info || '/'}</span></div>
                       <div>• Host: <span className="text-amber-300 font-mono">{packet.destIp}</span></div>
-                      <div>• User-Agent: <span className="text-slate-300 font-mono">NetTrace-DPI/1.0 (CobaltStrike/4.8)</span></div>
+                      <div>• User-Agent: <span className="text-slate-300 font-mono">NetTrace-DPI/1.0</span></div>
                     </>
                   )}
                   {isTls && (
                     <>
-                      <div>• TLS Version: <span className="text-amber-300 font-mono">TLS 1.3 (0x0304)</span></div>
-                      <div>• Handshake Protocol: <span className="text-slate-100 font-mono">Client Hello (1)</span></div>
-                      <div>• Cipher Suite: <span className="text-cyan-300 font-mono">TLS_AES_256_GCM_SHA384 (0x1302)</span></div>
-                      <div>• Server Name (SNI): <span className="text-emerald-300 font-mono font-bold">{packet.destIp === '185.220.101.5' ? 'c2-beacon.darknet' : 'auth-service.cloud'}</span></div>
+                      <div>• TLS Version: <span className="text-amber-300 font-mono">TLS 1.3</span></div>
+                      <div>• Handshake Protocol: <span className="text-slate-100 font-mono">Client Hello</span></div>
+                      <div>• Cipher Suite: <span className="text-cyan-300 font-mono">TLS_AES_256_GCM_SHA384</span></div>
+                      <div>• Server Name (SNI): <span className="text-emerald-300 font-mono font-bold">{packet.destIp}</span></div>
                     </>
                   )}
                 </div>
@@ -404,7 +392,12 @@ export const PacketHexViewer: React.FC<{ packet: Packet; onClose?: () => void }>
             </div>
 
             {/* Hex Dump Rows */}
-            {hexRows.map((row, rowIdx) => {
+            {hexRows.length === 0 ? (
+              <div className="p-4 text-center text-slate-500 font-sans text-xs italic">
+                No raw payload bytes available for this frame.
+              </div>
+            ) : (
+              hexRows.map((row, rowIdx) => {
               const rowStartByte = rowIdx * 16;
               return (
                 <div key={row.offset} className="flex items-center space-x-4 hover:bg-slate-900/80 py-0.5 rounded transition-colors group">
@@ -464,7 +457,8 @@ export const PacketHexViewer: React.FC<{ packet: Packet; onClose?: () => void }>
                   </div>
                 </div>
               );
-            })}
+            })
+          )}
           </div>
         </div>
       </div>

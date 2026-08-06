@@ -29,6 +29,8 @@ export interface PacketRecord {
   packetLength: number;
   info?: string;
   tcpFlags?: string;
+  payloadHex?: string;
+  payloadAscii?: string;
 }
 
 export interface PacketDetailRecord extends PacketRecord {
