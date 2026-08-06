@@ -20,21 +20,24 @@ class IncidentsRepository(BaseRepository[IncidentModel]):
         super().__init__(IncidentModel, session)
 
     def _build_user_filters(self, user: UserModel):
-        filters = [
-            IncidentModel.created_by == user.id,
-            IncidentModel.created_by == user.email,
-            IncidentModel.assigned_analyst == user.full_name,
-            IncidentModel.assigned_analyst == user.email,
-            IncidentModel.assigned_analyst == user.id,
-            IncidentModel.assigned_analyst.contains(user.email),
-            IncidentModel.assigned_analyst.contains(user.id),
-        ]
+        filters = []
+        if user.id:
+            filters.append(IncidentModel.created_by == user.id)
+            filters.append(IncidentModel.assigned_analyst == user.id)
+            filters.append(IncidentModel.assigned_analyst.contains(user.id))
+        if user.email:
+            filters.append(IncidentModel.created_by == user.email)
+            filters.append(IncidentModel.assigned_analyst == user.email)
+            filters.append(IncidentModel.assigned_analyst.contains(user.email))
+            if "@" in user.email:
+                prefix = user.email.split("@")[0]
+                if prefix:
+                    filters.append(IncidentModel.assigned_analyst.contains(prefix))
+                    filters.append(IncidentModel.created_by.contains(prefix))
         if user.full_name:
+            filters.append(IncidentModel.assigned_analyst == user.full_name)
             filters.append(IncidentModel.assigned_analyst.contains(user.full_name))
             filters.append(IncidentModel.created_by.contains(user.full_name))
-        if user.email and "@" in user.email:
-            filters.append(IncidentModel.assigned_analyst.contains(user.email.split("@")[0]))
-            filters.append(IncidentModel.created_by.contains(user.email.split("@")[0]))
         return filters
 
     async def get_incident_details(self, incident_id: str, user: Optional[UserModel] = None) -> Optional[IncidentModel]:
@@ -50,7 +53,9 @@ class IncidentsRepository(BaseRepository[IncidentModel]):
             .where(IncidentModel.id == incident_id, IncidentModel.is_deleted == False)
         )
         if user:
-            query = query.where(or_(*self._build_user_filters(user)))
+            u_filters = self._build_user_filters(user)
+            if u_filters:
+                query = query.where(or_(*u_filters))
         result = await self.session.execute(query)
         return result.scalars().first()
 
@@ -72,7 +77,9 @@ class IncidentsRepository(BaseRepository[IncidentModel]):
         ).where(IncidentModel.is_deleted == False)
 
         if user:
-            query = query.where(or_(*self._build_user_filters(user)))
+            u_filters = self._build_user_filters(user)
+            if u_filters:
+                query = query.where(or_(*u_filters))
         if status:
             query = query.where(IncidentModel.status == status)
         if severity:

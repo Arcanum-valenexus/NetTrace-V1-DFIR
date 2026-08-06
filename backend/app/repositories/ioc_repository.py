@@ -20,31 +20,41 @@ class IOCRepository(BaseRepository[IOCModel]):
     def _build_user_ioc_filter(self, user: UserModel):
         user_email_prefix = user.email.split("@")[0] if (user.email and "@" in user.email) else user.email
         
-        user_case_ids = select(CaseModel.id).where(CaseModel.created_by == user.id)
-        user_session_ids = select(PcapSessionModel.id).where(
-            or_(
-                PcapSessionModel.uploaded_by == user.email,
-                PcapSessionModel.uploaded_by == user.full_name,
-                PcapSessionModel.uploaded_by == user.id,
-                PcapSessionModel.uploaded_by.contains(user_email_prefix)
-            )
-        )
-        user_evidence_ids = select(EvidenceArtifactModel.id).where(
-            or_(
-                EvidenceArtifactModel.owner_investigator_id == user.id,
-                EvidenceArtifactModel.uploaded_by == user.email,
-                EvidenceArtifactModel.uploaded_by == user.full_name,
-                EvidenceArtifactModel.uploaded_by.contains(user_email_prefix)
-            )
-        )
-        user_incident_ids = select(IncidentModel.id).where(
-            or_(
-                IncidentModel.assigned_analyst == user.full_name,
-                IncidentModel.assigned_analyst == user.email,
-                IncidentModel.assigned_analyst == user.id,
-                IncidentModel.assigned_analyst.contains(user_email_prefix)
-            )
-        )
+        session_conds = []
+        if user.email:
+            session_conds.append(PcapSessionModel.uploaded_by == user.email)
+        if user.full_name:
+            session_conds.append(PcapSessionModel.uploaded_by == user.full_name)
+        if user.id:
+            session_conds.append(PcapSessionModel.uploaded_by == user.id)
+        if user_email_prefix:
+            session_conds.append(PcapSessionModel.uploaded_by.contains(user_email_prefix))
+
+        evidence_conds = []
+        if user.id:
+            evidence_conds.append(EvidenceArtifactModel.owner_investigator_id == user.id)
+        if user.email:
+            evidence_conds.append(EvidenceArtifactModel.uploaded_by == user.email)
+        if user.full_name:
+            evidence_conds.append(EvidenceArtifactModel.uploaded_by == user.full_name)
+        if user_email_prefix:
+            evidence_conds.append(EvidenceArtifactModel.uploaded_by.contains(user_email_prefix))
+
+        incident_conds = []
+        if user.full_name:
+            incident_conds.append(IncidentModel.assigned_analyst == user.full_name)
+        if user.email:
+            incident_conds.append(IncidentModel.assigned_analyst == user.email)
+        if user.id:
+            incident_conds.append(IncidentModel.assigned_analyst == user.id)
+        if user_email_prefix:
+            incident_conds.append(IncidentModel.assigned_analyst.contains(user_email_prefix))
+
+        user_case_ids = select(CaseModel.id).where(CaseModel.created_by == user.id) if user.id else select(CaseModel.id).where(CaseModel.id == "")
+        user_session_ids = select(PcapSessionModel.id).where(or_(*session_conds)) if session_conds else select(PcapSessionModel.id).where(PcapSessionModel.id == "")
+        user_evidence_ids = select(EvidenceArtifactModel.id).where(or_(*evidence_conds)) if evidence_conds else select(EvidenceArtifactModel.id).where(EvidenceArtifactModel.id == "")
+        user_incident_ids = select(IncidentModel.id).where(or_(*incident_conds)) if incident_conds else select(IncidentModel.id).where(IncidentModel.id == "")
+
         return or_(
             IOCModel.source_session.in_(user_session_ids),
             IOCModel.evidence_id.in_(user_evidence_ids),

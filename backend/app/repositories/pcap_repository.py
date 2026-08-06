@@ -16,13 +16,17 @@ class PcapRepository(BaseRepository[PcapSessionModel]):
         super().__init__(PcapSessionModel, session)
 
     def _build_user_filters(self, user: UserModel):
-        filters = [
-            PcapSessionModel.uploaded_by == user.email,
-            PcapSessionModel.uploaded_by == user.full_name,
-            PcapSessionModel.uploaded_by == user.id,
-        ]
-        if user.email and "@" in user.email:
-            filters.append(PcapSessionModel.uploaded_by.contains(user.email.split("@")[0]))
+        filters = []
+        if user.email:
+            filters.append(PcapSessionModel.uploaded_by == user.email)
+            if "@" in user.email:
+                prefix = user.email.split("@")[0]
+                if prefix:
+                    filters.append(PcapSessionModel.uploaded_by.contains(prefix))
+        if user.full_name:
+            filters.append(PcapSessionModel.uploaded_by == user.full_name)
+        if user.id:
+            filters.append(PcapSessionModel.uploaded_by == user.id)
         return filters
 
     async def create_session(self, **data) -> PcapSessionModel:

@@ -8,23 +8,13 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Middleware enforcing OWASP recommended Security Headers."""
 
     def _build_csp(self) -> str:
-        if settings.ENVIRONMENT == "development":
-            return (
-                "default-src 'self'; "
-                "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
-                "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
-                "img-src 'self' data: https://fastapi.tiangolo.com; "
-                "font-src 'self' https://cdn.jsdelivr.net; "
-                "connect-src 'self'"
-            )
-
         return (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
             "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
             "img-src 'self' data: https://fastapi.tiangolo.com; "
             "font-src 'self' https://cdn.jsdelivr.net; "
-            "connect-src 'self'"
+            "connect-src 'self' https://net-trace-v1-dfir.vercel.app https://nettrace-v1-dfir.onrender.com https://*.vercel.app *"
         )
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:

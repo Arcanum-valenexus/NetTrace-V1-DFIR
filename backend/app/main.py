@@ -22,10 +22,9 @@ async def lifespan(app: FastAPI):
         version="1.0.0",
     )
 
-    if settings.ENVIRONMENT == "development":
-        async with async_engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-            logger.info("Database schema ensured for development environment")
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+        logger.info("Database schema ensured across all models")
 
     yield
     logger.info("Shutting down NetTrace Enterprise Backend Engine")
@@ -41,18 +40,19 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# 1. CORS Middleware
+# 1. Internal Security Headers & Request Logging Middlewares (Applied first, inner layer)
+app.add_middleware(RequestLoggingMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
+
+# 2. CORS Middleware (Applied last, outermost layer so preflights & error responses carry CORS headers)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# 2. Security Headers & Request Logging Middlewares
-app.add_middleware(SecurityHeadersMiddleware)
-app.add_middleware(RequestLoggingMiddleware)
 
 # 3. Centralized Exception Handlers
 register_exception_handlers(app)

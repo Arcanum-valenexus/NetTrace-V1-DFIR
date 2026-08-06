@@ -15,13 +15,17 @@ class EvidenceRepository(BaseRepository[EvidenceArtifactModel]):
         super().__init__(EvidenceArtifactModel, session)
 
     def _build_user_filters(self, user: UserModel):
-        filters = [
-            EvidenceArtifactModel.owner_investigator_id == user.id,
-            EvidenceArtifactModel.uploaded_by == user.email,
-            EvidenceArtifactModel.uploaded_by == user.full_name,
-        ]
-        if user.email and "@" in user.email:
-            filters.append(EvidenceArtifactModel.uploaded_by.contains(user.email.split("@")[0]))
+        filters = []
+        if user.id:
+            filters.append(EvidenceArtifactModel.owner_investigator_id == user.id)
+        if user.email:
+            filters.append(EvidenceArtifactModel.uploaded_by == user.email)
+            if "@" in user.email:
+                prefix = user.email.split("@")[0]
+                if prefix:
+                    filters.append(EvidenceArtifactModel.uploaded_by.contains(prefix))
+        if user.full_name:
+            filters.append(EvidenceArtifactModel.uploaded_by == user.full_name)
         return filters
 
     async def get_evidence_details(self, evidence_id: str, user: Optional[UserModel] = None) -> Optional[EvidenceArtifactModel]:

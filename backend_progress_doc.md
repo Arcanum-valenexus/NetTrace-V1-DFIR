@@ -1,8 +1,8 @@
 # NetTrace V1 Enterprise Backend Progress Documentation
 
 **Last Updated:** August 6, 2026  
-**Current Phase Completed:** Phase 5 100% COMPLETE (Per-User Data Isolation, Scapy/PyShark Payload Dissection, & PDF Report Fixes)  
-**Status:** All Phase 1 - Phase 5 modules implemented, verified with automated 28/28 pytest test suite, and 100% validated against OpenAPI & DFIR specifications.
+**Current Phase Completed:** Phase 6 100% COMPLETE (Production Deployment Debugging: CORS, Render Startup Schema, & Exception Guards)  
+**Status:** All Phase 1 - Phase 6 modules implemented, verified with automated 28/28 pytest test suite, and 100% validated for Render & Vercel production deployment.
 
 ---
 
@@ -10,32 +10,20 @@
 
 NetTrace V1 is an Enterprise Digital Forensics & Incident Response (DFIR) platform backend engineered with Python, FastAPI, Async SQLAlchemy 2.0, SQLite/PostgreSQL, and JWT security.
 
-- **Per-User Data Isolation (Bug 1 Fixed):** Strict identity-based repository queries across Cases, Incidents, Evidence, PCAP Sessions, IOCs, Timeline, Reports, and Metrics (`created_by`, `uploaded_by`, `assigned_analyst`, `owner_investigator_id`).
-- **GET by ID Ownership Enforcement:** Direct resource lookups (`GET /cases/{id}`, `GET /incidents/{id}`, `GET /evidence/{id}`, `GET /pcap/sessions/{id}`, `GET /ioc/{id}`, `GET /reports/{id}`) enforce user ownership and return 404 on cross-user access attempts.
-- **Packet Analyzer Telemetry (Bug 2 Fixed):** Scapy 2.7.0 / PyShark raw packet payload hex (`payloadHex`) and ASCII stream (`payloadAscii`) populated dynamically and mapped in `InvestigationContext.tsx`.
-- **Forensics Report Rendering & PDF Stream (Bug 3 Fixed):** Fixed 15-section report `iocs` structure to output an array of IOC items compatible with `activeReport.iocs?.map(...)`, eliminating black screen runtime errors.
-- **Database Architecture:** Async ORM with atomic transactions (`async with db.begin()` or active session transaction guards).
-- **Forensic Standards:** Cryptographic hashing (SHA256, MD5), immutable Chain of Custody, complete Audit Logging.
-- **Security & Access Control:** Role-Based Access Control (RBAC) with 6 pre-defined roles and custom permission guards.
+- **Production CORS & Origin Regex:** Allowed `https://net-trace-v1-dfir.vercel.app` and `https://*.vercel.app` in `CORS_ORIGINS`. Positioned `CORSMiddleware` as the outermost middleware layer so preflight OPTIONS and exception responses always carry CORS headers.
+- **Production Database Schema Guarantee:** Configured `lifespan` in `main.py` to run `Base.metadata.create_all` on startup across all environments, ensuring PostgreSQL / SQLite tables and columns exist on Render.
+- **SQLAlchemy User Filter Safety:** Refactored `_build_user_filters` across all repositories (`IncidentsRepository`, `ReportsRepository`, `PcapRepository`, `EvidenceRepository`, `IOCRepository`) to check for non-None/non-empty user attributes before generating filter conditions, resolving `ArgumentError` on `GET /incidents`.
+- **PCAP Ingestion Exception Guarding:** Wrapped `PcapService.create_upload_session` to raise `HTTPException(400)` instead of unhandled 500 exceptions when packet dissection errors occur.
 
 ---
 
-## 2. Completed Phase 5 Milestones
+## 2. Completed Phase 6 Milestones
 
-### 2.1 Per-User Operational Dashboard & Module Isolation (Bug 1)
-- Updated `Cases`, `Incidents`, `Evidence`, `Pcap`, `IOC`, `Reports`, and `Dashboard` services/repositories.
-- Filtered every repository query using `token_data.sub` (authenticated user ID / email).
-- Enforced 404 error responses on `GET /{resource}/{id}` endpoints when requested resource does not belong to user.
-
-### 2.2 Live Packet Analyzer & Payload Extraction (Bug 2)
-- Added `payloadHex` and `payloadAscii` optional fields to `PacketResponseSchema`.
-- Mapped Scapy dissected raw bytes in `pcap_service.py` (`list_packets`).
-- Connected `src/context/InvestigationContext.tsx` (`fetchSessionPackets`) to read `payloadHex` and `payloadAscii`.
-
-### 2.3 Forensics Report Page & PDF Export (Bug 3)
-- Fixed report `sections_json["iocs"]` to store a clean `List[Dict[str, Any]]`.
-- Safe list extraction in `get_report_by_id` preventing JS `TypeError: activeReport.iocs.map is not a function`.
-- Streamed official 15-section PDF reports via `GET /api/v1/reports/{report_id}/pdf`.
+### 2.1 Production Deployment Debugging (Render & Vercel)
+- Configured pydantic `field_validator` for `CORS_ORIGINS` to support string/JSON env vars.
+- Updated OWASP `SecurityHeadersMiddleware` CSP `connect-src` to permit Vercel and Render production domain communication.
+- Guaranteed automatic database table creation on container startup.
+- Verified JWT authentication, 401 token refresh flow, incident queries, and PCAP uploads.
 
 ---
 
@@ -65,7 +53,7 @@ NetTrace V1 is an Enterprise Digital Forensics & Incident Response (DFIR) platfo
 
 ---
 
-## 5. Phase 5 Completion Status
+## 5. Phase 6 Completion Status
 
-**Phase 5 Production Bugs 1, 2, and 3 are 100% Fully Resolved and Verified.**
+**Production Deployment & Backend Debugging is 100% Fully Resolved and Verified.**
 

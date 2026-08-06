@@ -221,7 +221,12 @@ class PcapService:
                     severity="Critical",
                 )
                 await self.session.commit()
-            raise err
+            if isinstance(err, HTTPException):
+                raise err
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"PCAP packet analysis failed: {str(err)}",
+            )
 
         updated_session = await self.pcap_repo.get_session(pcap_session_id)
 

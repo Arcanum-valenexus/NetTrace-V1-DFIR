@@ -18,13 +18,17 @@ class ReportsRepository(BaseRepository[ForensicsReportModel]):
         super().__init__(ForensicsReportModel, session)
 
     def _build_user_filters(self, user: UserModel):
-        filters = [
-            ForensicsReportModel.generated_by == user.id,
-            ForensicsReportModel.generated_by == user.email,
-            ForensicsReportModel.generated_by == user.full_name,
-        ]
-        if user.email and "@" in user.email:
-            filters.append(ForensicsReportModel.generated_by.contains(user.email.split("@")[0]))
+        filters = []
+        if user.id:
+            filters.append(ForensicsReportModel.generated_by == user.id)
+        if user.email:
+            filters.append(ForensicsReportModel.generated_by == user.email)
+            if "@" in user.email:
+                prefix = user.email.split("@")[0]
+                if prefix:
+                    filters.append(ForensicsReportModel.generated_by.contains(prefix))
+        if user.full_name:
+            filters.append(ForensicsReportModel.generated_by == user.full_name)
         return filters
 
     async def get_report_details(self, report_id: str, user: Optional[UserModel] = None) -> Optional[ForensicsReportModel]:
