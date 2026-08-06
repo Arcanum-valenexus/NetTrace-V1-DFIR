@@ -43,7 +43,7 @@ async def get_case(
 ):
     """Fetches case details."""
     case_service = CaseService(db)
-    case = await case_service.get_case_by_id(case_id)
+    case = await case_service.get_case_by_id(case_id, user_id=token_data.sub)
     return ResponseEnvelope(success=True, data=case)
 
 

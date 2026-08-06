@@ -49,10 +49,10 @@ class CaseService:
                 updatedAt=case.updated_at.isoformat(),
             )
 
-    async def get_case_by_id(self, case_id: str) -> CaseResponseSchema:
+    async def get_case_by_id(self, case_id: str, user_id: Optional[str] = None) -> CaseResponseSchema:
         """Fetch case details by ID."""
         case = await self.cases_repo.get_by_id(case_id)
-        if not case or case.is_deleted:
+        if not case or case.is_deleted or (user_id and case.created_by != user_id):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Case with ID '{case_id}' not found.",
@@ -92,7 +92,7 @@ class CaseService:
         """Update case details in an atomic transaction."""
         async with self.session.begin():
             case = await self.cases_repo.get_by_id(case_id)
-            if not case or case.is_deleted:
+            if not case or case.is_deleted or (actor_id and case.created_by != actor_id):
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found.")
 
             if payload.title is not None:
@@ -127,7 +127,7 @@ class CaseService:
         """Soft delete case preserving forensic audit integrity."""
         async with self.session.begin():
             case = await self.cases_repo.get_by_id(case_id)
-            if not case or case.is_deleted:
+            if not case or case.is_deleted or (actor_id and case.created_by != actor_id):
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found.")
 
             case.is_deleted = True

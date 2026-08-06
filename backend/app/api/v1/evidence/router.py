@@ -17,6 +17,10 @@ from app.schemas.base import ResponseEnvelope
 router = APIRouter(prefix="/evidence", tags=["Evidence Vault & Custody"])
 
 
+from sqlalchemy import select
+from app.models.user import UserModel
+
+
 @router.get("", response_model=ResponseEnvelope[List[EvidenceArtifactResponse]], summary="List Evidence Artifacts")
 async def list_evidence(
     category: Optional[str] = None,
@@ -26,7 +30,9 @@ async def list_evidence(
 ):
     """Lists active evidence artifacts in vault."""
     evidence_repo = EvidenceRepository(db)
-    artifacts = await evidence_repo.list_evidence(category=category, case_id=case_id)
+    user_res = await db.execute(select(UserModel).where(UserModel.id == token_data.sub))
+    user = user_res.scalars().first()
+    artifacts = await evidence_repo.list_evidence(category=category, case_id=case_id, user=user)
     
     responses = [
         EvidenceArtifactResponse(
@@ -66,6 +72,60 @@ async def list_evidence(
         for a in artifacts
     ]
     return ResponseEnvelope(success=True, data=responses)
+
+
+@router.get("/{evidence_id}", response_model=ResponseEnvelope[EvidenceArtifactResponse], summary="Get Evidence Details")
+async def get_evidence(
+    evidence_id: str,
+    token_data: TokenData = Depends(require_permissions([PermissionEnum.CASES_READ])),
+    db: AsyncSession = Depends(get_db)
+):
+    """Fetches evidence artifact details enforcing user ownership."""
+    evidence_repo = EvidenceRepository(db)
+    user_res = await db.execute(select(UserModel).where(UserModel.id == token_data.sub))
+    user = user_res.scalars().first()
+    a = await evidence_repo.get_evidence_details(evidence_id, user=user)
+    if not a:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Evidence artifact '{evidence_id}' not found.")
+
+    return ResponseEnvelope(
+        success=True,
+        data=EvidenceArtifactResponse(
+            id=a.id,
+            caseId=a.case_id,
+            incidentId=a.incident_id,
+            name=a.name,
+            category=a.category,
+            description=a.description,
+            tags=a.tags or [],
+            sizeBytes=a.size_bytes,
+            hashSha256=a.hash_sha256,
+            hashMd5=a.hash_md5,
+            uploadedAt=a.uploaded_at,
+            uploadedBy=a.uploaded_by,
+            storagePath=a.storage_path,
+            analysisStatus=a.analysis_status,
+            analysisEngine=a.analysis_engine,
+            packetCount=a.packet_count,
+            captureDuration=a.capture_duration,
+            topProtocols=a.top_protocols or [],
+            analysisSummary=a.analysis_summary or {},
+            analysisCompletedAt=a.analysis_completed_at,
+            chainOfCustody=[
+                ChainOfCustodyEntrySchema(
+                    id=c.id,
+                    evidenceId=c.evidence_id,
+                    caseId=c.case_id,
+                    action=c.action,
+                    actor=c.actor,
+                    timestamp=c.timestamp,
+                    notes=c.notes
+                )
+                for c in a.chain_of_custody
+            ]
+        )
+    )
 
 
 @router.post("/upload", response_model=ResponseEnvelope[EvidenceArtifactResponse], status_code=status.HTTP_201_CREATED, summary="Upload Evidence Artifact")
@@ -180,7 +240,13 @@ async def delete_evidence(
     async with db.begin():
         evidence_repo = EvidenceRepository(db)
         audit_repo = AuditRepository(db)
-        await evidence_repo.soft_delete_evidence(evidence_id, deleted_by=token_data.sub)
+        user_res = await db.execute(select(UserModel).where(UserModel.id == token_data.sub))
+        user = user_res.scalars().first()
+        success = await evidence_repo.soft_delete_evidence(evidence_id, deleted_by=token_data.sub, user=user)
+        if not success:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence artifact not found.")
+
         await audit_repo.log_event(
             event_type="EVIDENCE_DELETED",
             actor_id=token_data.sub,

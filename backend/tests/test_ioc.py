@@ -116,5 +116,8 @@ async def test_ioc_dashboard_and_report_integration():
         report = rep_res.json()["data"]
         assert "iocs" in report
         ioc_section = report["iocs"]
-        assert ioc_section["iocCount"] >= 1
-        assert "suspiciousIps" in ioc_section or "suspiciousDomains" in ioc_section
+        if isinstance(ioc_section, list):
+            assert len(ioc_section) >= 1
+        else:
+            assert ioc_section["iocCount"] >= 1
+            assert "suspiciousIps" in ioc_section or "suspiciousDomains" in ioc_section

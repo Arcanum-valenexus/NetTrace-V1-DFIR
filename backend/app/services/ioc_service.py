@@ -185,6 +185,14 @@ class IOCService:
 
         return [self._map_model_to_schema(ioc) for ioc in created_objs]
 
+    async def _get_user(self, user_id: Optional[str]) -> Optional["UserModel"]:
+        if not user_id:
+            return None
+        from app.models.user import UserModel
+        from sqlalchemy import select
+        res = await self.session.execute(select(UserModel).where(UserModel.id == user_id))
+        return res.scalars().first()
+
     async def list_iocs(
         self,
         type: Optional[str] = None,
@@ -193,21 +201,24 @@ class IOCService:
         session: Optional[str] = None,
         incident: Optional[str] = None,
         case: Optional[str] = None,
+        user_id: Optional[str] = None,
         skip: int = 0,
         limit: int = 100,
     ) -> IOCListResponseSchema:
         """List active IOC records with optional filters."""
+        user = await self._get_user(user_id) if user_id else None
         iocs = await self.ioc_repo.list_iocs(
-            type=type, status=status, severity=severity, session=session, incident=incident, case=case, skip=skip, limit=limit
+            type=type, status=status, severity=severity, session=session, incident=incident, case=case, user=user, skip=skip, limit=limit
         )
         return IOCListResponseSchema(
             totalCount=len(iocs),
             iocs=[self._map_model_to_schema(ioc) for ioc in iocs]
         )
 
-    async def get_ioc(self, ioc_id: str) -> IOCResponseSchema:
-        """Fetch single IOC details by ID."""
-        ioc = await self.ioc_repo.get_ioc(ioc_id)
+    async def get_ioc(self, ioc_id: str, user_id: Optional[str] = None) -> IOCResponseSchema:
+        """Fetch single IOC details by ID enforcing user ownership."""
+        user = await self._get_user(user_id) if user_id else None
+        ioc = await self.ioc_repo.get_ioc(ioc_id, user=user)
         if not ioc or ioc.is_deleted:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -215,8 +226,8 @@ class IOCService:
             )
         return self._map_model_to_schema(ioc)
 
-    async def update_status(self, ioc_id: str, new_status: str, actor_id: str = "Analyst") -> IOCResponseSchema:
-        """Updates IOC lifecycle status and logs timeline event."""
+    async def update_status(self, ioc_id: str, new_status: str, actor_id: str = "Analyst", user_id: Optional[str] = None) -> IOCResponseSchema:
+        """Updates IOC lifecycle status enforcing user ownership and logs timeline event."""
         valid_statuses = {"Active", "Investigating", "Whitelisted", "Blocked"}
         if new_status not in valid_statuses:
             raise HTTPException(
@@ -224,7 +235,8 @@ class IOCService:
                 detail=f"Invalid status '{new_status}'. Allowed values: {list(valid_statuses)}",
             )
 
-        ioc = await self.ioc_repo.update_status(ioc_id, new_status)
+        user = await self._get_user(user_id or actor_id)
+        ioc = await self.ioc_repo.update_status(ioc_id, new_status, user=user)
         if not ioc:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -245,16 +257,17 @@ class IOCService:
 
         return self._map_model_to_schema(ioc)
 
-    async def delete_ioc(self, ioc_id: str, actor_id: str = "Analyst") -> bool:
-        """Soft-deletes IOC record and logs timeline event."""
-        ioc = await self.ioc_repo.get_ioc(ioc_id)
+    async def delete_ioc(self, ioc_id: str, actor_id: str = "Analyst", user_id: Optional[str] = None) -> bool:
+        """Soft-deletes IOC record enforcing user ownership and logs timeline event."""
+        user = await self._get_user(user_id or actor_id)
+        ioc = await self.ioc_repo.get_ioc(ioc_id, user=user)
         if not ioc:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"IOC record with ID '{ioc_id}' was not found.",
             )
 
-        success = await self.ioc_repo.delete_ioc(ioc_id, deleted_by=actor_id)
+        success = await self.ioc_repo.delete_ioc(ioc_id, deleted_by=actor_id, user=user)
 
         # Log Timeline Event
         await self.timeline_repo.create_pcap_event(

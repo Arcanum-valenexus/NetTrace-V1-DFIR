@@ -1,5 +1,5 @@
 from typing import List, Optional
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from app.models.incident import (
@@ -9,6 +9,7 @@ from app.models.incident import (
     AnalystNoteModel,
     ContainmentChecklistModel
 )
+from app.models.user import UserModel
 from app.repositories.base import BaseRepository
 
 
@@ -18,9 +19,27 @@ class IncidentsRepository(BaseRepository[IncidentModel]):
     def __init__(self, session: AsyncSession):
         super().__init__(IncidentModel, session)
 
-    async def get_incident_details(self, incident_id: str) -> Optional[IncidentModel]:
+    def _build_user_filters(self, user: UserModel):
+        filters = [
+            IncidentModel.created_by == user.id,
+            IncidentModel.created_by == user.email,
+            IncidentModel.assigned_analyst == user.full_name,
+            IncidentModel.assigned_analyst == user.email,
+            IncidentModel.assigned_analyst == user.id,
+            IncidentModel.assigned_analyst.contains(user.email),
+            IncidentModel.assigned_analyst.contains(user.id),
+        ]
+        if user.full_name:
+            filters.append(IncidentModel.assigned_analyst.contains(user.full_name))
+            filters.append(IncidentModel.created_by.contains(user.full_name))
+        if user.email and "@" in user.email:
+            filters.append(IncidentModel.assigned_analyst.contains(user.email.split("@")[0]))
+            filters.append(IncidentModel.created_by.contains(user.email.split("@")[0]))
+        return filters
+
+    async def get_incident_details(self, incident_id: str, user: Optional[UserModel] = None) -> Optional[IncidentModel]:
         """Fetch incident with eagerly loaded assets, timeline, notes, and checklist."""
-        result = await self.session.execute(
+        query = (
             select(IncidentModel)
             .options(
                 selectinload(IncidentModel.impacted_assets),
@@ -30,6 +49,9 @@ class IncidentsRepository(BaseRepository[IncidentModel]):
             )
             .where(IncidentModel.id == incident_id, IncidentModel.is_deleted == False)
         )
+        if user:
+            query = query.where(or_(*self._build_user_filters(user)))
+        result = await self.session.execute(query)
         return result.scalars().first()
 
     async def list_incidents(
@@ -37,10 +59,11 @@ class IncidentsRepository(BaseRepository[IncidentModel]):
         status: Optional[str] = None,
         severity: Optional[str] = None,
         category: Optional[str] = None,
+        user: Optional[UserModel] = None,
         skip: int = 0,
         limit: int = 100
     ) -> List[IncidentModel]:
-        """List active incidents with optional status/severity/category filters."""
+        """List active incidents with optional status/severity/category/user filters."""
         query = select(IncidentModel).options(
             selectinload(IncidentModel.impacted_assets),
             selectinload(IncidentModel.timeline_events),
@@ -48,6 +71,8 @@ class IncidentsRepository(BaseRepository[IncidentModel]):
             selectinload(IncidentModel.checklist_tasks)
         ).where(IncidentModel.is_deleted == False)
 
+        if user:
+            query = query.where(or_(*self._build_user_filters(user)))
         if status:
             query = query.where(IncidentModel.status == status)
         if severity:

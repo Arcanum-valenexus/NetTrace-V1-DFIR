@@ -21,6 +21,10 @@ from app.schemas.pcap import (
 )
 
 
+from app.models.user import UserModel
+from sqlalchemy import select
+
+
 class PcapService:
     """Service handling PCAP file uploads, evidence vault linking, Scapy dissection, PyShark deep analysis, and session management."""
 
@@ -31,6 +35,12 @@ class PcapService:
         self.pcap_repo = PcapRepository(session)
         self.evidence_repo = EvidenceRepository(session)
         self.audit_repo = AuditRepository(session)
+
+    async def _get_user(self, user_id: Optional[str]) -> Optional[UserModel]:
+        if not user_id:
+            return None
+        res = await self.session.execute(select(UserModel).where(UserModel.id == user_id))
+        return res.scalars().first()
 
     async def create_upload_session(
         self,
@@ -60,7 +70,7 @@ class PcapService:
         storage_service = StorageService()
         await storage_service.save_evidence_file(content, storage_path)
 
-        async with self.session.begin():
+        async def _do_init():
             # Create Evidence Artifact
             artifact = await self.evidence_repo.create(
                 case_id=case_id,
@@ -138,25 +148,63 @@ class PcapService:
                 session_id=pcap_session_id,
                 severity="Info",
             )
+            return pcap_session_id, artifact_id
+
+        if not self.session.in_transaction():
+            async with self.session.begin():
+                pcap_session_id, artifact_id = await _do_init()
+        else:
+            pcap_session_id, artifact_id = await _do_init()
+            await self.session.commit()
 
         try:
             # 1. Execute Scapy Dissection
             scapy_service = ScapyService(self.pcap_repo)
-            async with self.session.begin():
+            if not self.session.in_transaction():
+                async with self.session.begin():
+                    await scapy_service.dissect_and_persist(pcap_session_id, storage_path)
+            else:
                 await scapy_service.dissect_and_persist(pcap_session_id, storage_path)
+                await self.session.commit()
 
             # 2. Execute PyShark Deep Analysis / Fallback Enrichment
             pyshark_service = PySharkService(self.pcap_repo)
-            async with self.session.begin():
+            if not self.session.in_transaction():
+                async with self.session.begin():
+                    await pyshark_service.enrich_session_analysis(pcap_session_id, storage_path)
+            else:
                 await pyshark_service.enrich_session_analysis(pcap_session_id, storage_path)
+                await self.session.commit()
 
             # 3. Execute Automated IOC Extraction from Packet Payloads
             from app.services.ioc_service import IOCService
             ioc_service = IOCService(self.session)
-            async with self.session.begin():
+            if not self.session.in_transaction():
+                async with self.session.begin():
+                    await ioc_service.extract_iocs_from_session(pcap_session_id, case_id=case_id, incident_id=incident_id, actor_id=uploader)
+            else:
                 await ioc_service.extract_iocs_from_session(pcap_session_id, case_id=case_id, incident_id=incident_id, actor_id=uploader)
+                await self.session.commit()
         except Exception as err:
-            async with self.session.begin():
+            from app.repositories.timeline_repository import TimelineRepository
+            if not self.session.in_transaction():
+                async with self.session.begin():
+                    await self.pcap_repo.update_status(pcap_session_id, "Failed")
+                    artifact_obj = await self.evidence_repo.get_by_id(artifact_id)
+                    if artifact_obj:
+                        artifact_obj.analysis_status = "Failed"
+                    timeline_repo = TimelineRepository(self.session)
+                    await timeline_repo.create_pcap_event(
+                        event_type="Analysis Failed",
+                        description=f"PCAP packet analysis failed: {str(err)}",
+                        user=uploader,
+                        case_id=case_id,
+                        incident_id=incident_id,
+                        evidence_id=artifact_id,
+                        session_id=pcap_session_id,
+                        severity="Critical",
+                    )
+            else:
                 await self.pcap_repo.update_status(pcap_session_id, "Failed")
                 artifact_obj = await self.evidence_repo.get_by_id(artifact_id)
                 if artifact_obj:
@@ -170,8 +218,9 @@ class PcapService:
                     incident_id=incident_id,
                     evidence_id=artifact_id,
                     session_id=pcap_session_id,
-                    severity="High",
+                    severity="Critical",
                 )
+                await self.session.commit()
             raise err
 
         updated_session = await self.pcap_repo.get_session(pcap_session_id)
@@ -187,9 +236,10 @@ class PcapService:
             evidenceId=artifact_id,
         )
 
-    async def get_session(self, session_id: str) -> PcapSessionResponseSchema:
-        """Fetch PCAP session metadata by ID along with top protocols and analysis summary."""
-        session_obj = await self.pcap_repo.get_session(session_id)
+    async def get_session(self, session_id: str, user_id: Optional[str] = None) -> PcapSessionResponseSchema:
+        """Fetch PCAP session metadata by ID enforcing user ownership."""
+        user = await self._get_user(user_id) if user_id else None
+        session_obj = await self.pcap_repo.get_session(session_id, user=user)
         if not session_obj:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -212,9 +262,10 @@ class PcapService:
             analysisSummary=session_obj.analysis_summary or {},
         )
 
-    async def list_sessions(self, skip: int = 0, limit: int = 100) -> List[PcapSessionResponseSchema]:
-        """List all active PCAP sessions."""
-        sessions = await self.pcap_repo.list_sessions(skip=skip, limit=limit)
+    async def list_sessions(self, user_id: Optional[str] = None, skip: int = 0, limit: int = 100) -> List[PcapSessionResponseSchema]:
+        """List active PCAP sessions filtered by user identity."""
+        user = await self._get_user(user_id) if user_id else None
+        sessions = await self.pcap_repo.list_sessions(user=user, skip=skip, limit=limit)
         return [
             PcapSessionResponseSchema(
                 id=s.id,
@@ -234,9 +285,10 @@ class PcapService:
             for s in sessions
         ]
 
-    async def list_packets(self, session_id: str, skip: int = 0, limit: int = 100) -> PacketListResponseSchema:
-        """List packets associated with a PCAP session."""
-        session_obj = await self.pcap_repo.get_session(session_id)
+    async def list_packets(self, session_id: str, user_id: Optional[str] = None, skip: int = 0, limit: int = 100) -> PacketListResponseSchema:
+        """List packets associated with a PCAP session enforcing user ownership."""
+        user = await self._get_user(user_id) if user_id else None
+        session_obj = await self.pcap_repo.get_session(session_id, user=user)
         if not session_obj:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -258,6 +310,8 @@ class PcapService:
                 packetLength=p.packet_length,
                 info=p.info,
                 tcpFlags=p.tcp_flags,
+                payloadHex=p.payload_hex,
+                payloadAscii=p.payload_ascii,
             )
             for p in packets
         ]
@@ -268,9 +322,10 @@ class PcapService:
             packets=packet_responses,
         )
 
-    async def get_packet_detail(self, session_id: str, packet_number: int) -> PacketDetailResponseSchema:
-        """Fetch detailed packet metadata and Hex/ASCII payload streams."""
-        session_obj = await self.pcap_repo.get_session(session_id)
+    async def get_packet_detail(self, session_id: str, packet_number: int, user_id: Optional[str] = None) -> PacketDetailResponseSchema:
+        """Fetch detailed packet metadata and Hex/ASCII payload streams enforcing user ownership."""
+        user = await self._get_user(user_id) if user_id else None
+        session_obj = await self.pcap_repo.get_session(session_id, user=user)
         if not session_obj:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

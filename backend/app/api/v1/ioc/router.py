@@ -33,7 +33,7 @@ async def list_iocs(
     """Queries extracted Indicators of Compromise (IOCs) with optional filtering."""
     ioc_service = IOCService(db)
     iocs_data = await ioc_service.list_iocs(
-        type=type, status=status, severity=severity, session=session, incident=incident, case=case, skip=skip, limit=limit
+        type=type, status=status, severity=severity, session=session, incident=incident, case=case, user_id=token_data.sub, skip=skip, limit=limit
     )
     return ResponseEnvelope(success=True, data=iocs_data)
 
@@ -46,7 +46,7 @@ async def get_ioc(
 ):
     """Fetches details for a specific IOC record."""
     ioc_service = IOCService(db)
-    ioc = await ioc_service.get_ioc(ioc_id)
+    ioc = await ioc_service.get_ioc(ioc_id, user_id=token_data.sub)
     return ResponseEnvelope(success=True, data=ioc)
 
 
@@ -80,7 +80,7 @@ async def update_ioc_status(
     ioc_service = IOCService(db)
     actor = token_data.email or token_data.sub
     async with db.begin():
-        updated = await ioc_service.update_status(ioc_id=ioc_id, new_status=payload.status, actor_id=actor)
+        updated = await ioc_service.update_status(ioc_id=ioc_id, new_status=payload.status, actor_id=actor, user_id=token_data.sub)
     return ResponseEnvelope(success=True, data=updated)
 
 
@@ -94,5 +94,5 @@ async def delete_ioc(
     ioc_service = IOCService(db)
     actor = token_data.email or token_data.sub
     async with db.begin():
-        await ioc_service.delete_ioc(ioc_id=ioc_id, actor_id=actor)
+        await ioc_service.delete_ioc(ioc_id=ioc_id, actor_id=actor, user_id=token_data.sub)
     return ResponseEnvelope(success=True, message="IOC record deleted successfully")

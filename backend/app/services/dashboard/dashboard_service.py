@@ -71,13 +71,38 @@ class DashboardService:
         # Count total IOCs
         ioc_query = select(func.count()).select_from(IOCModel).where(IOCModel.is_deleted == False)
         if user:
+            user_email_prefix = user.email.split("@")[0] if (user.email and "@" in user.email) else user.email
+            from app.models.case import CaseModel
+            user_session_ids = select(PcapSessionModel.id).where(
+                or_(
+                    PcapSessionModel.uploaded_by == user.email,
+                    PcapSessionModel.uploaded_by == user.full_name,
+                    PcapSessionModel.uploaded_by == user.id,
+                    PcapSessionModel.uploaded_by.contains(user_email_prefix)
+                )
+            )
+            user_evidence_ids = select(EvidenceArtifactModel.id).where(
+                or_(
+                    EvidenceArtifactModel.owner_investigator_id == user.id,
+                    EvidenceArtifactModel.uploaded_by == user.email,
+                    EvidenceArtifactModel.uploaded_by == user.full_name,
+                    EvidenceArtifactModel.uploaded_by.contains(user_email_prefix)
+                )
+            )
+            user_incident_ids = select(IncidentModel.id).where(
+                or_(
+                    IncidentModel.assigned_analyst == user.full_name,
+                    IncidentModel.assigned_analyst == user.email,
+                    IncidentModel.assigned_analyst == user.id,
+                    IncidentModel.assigned_analyst.contains(user_email_prefix)
+                )
+            )
+            user_case_ids = select(CaseModel.id).where(CaseModel.created_by == user.id)
             ioc_query = ioc_query.where(or_(
-                IOCModel.source_session.in_(
-                    select(PcapSessionModel.id).where(or_(PcapSessionModel.uploaded_by == user.email, PcapSessionModel.uploaded_by == user.full_name))
-                ),
-                IOCModel.case_id.in_(
-                    select(EvidenceArtifactModel.case_id).where(EvidenceArtifactModel.owner_investigator_id == user.id)
-                ) if user.id else False
+                IOCModel.source_session.in_(user_session_ids),
+                IOCModel.evidence_id.in_(user_evidence_ids),
+                IOCModel.incident_id.in_(user_incident_ids),
+                IOCModel.case_id.in_(user_case_ids)
             ))
         ioc_count_res = await self.session.execute(ioc_query)
         ioc_count = ioc_count_res.scalar_one() or 0
@@ -102,9 +127,12 @@ class DashboardService:
 
         session_filter = [PcapSessionModel.id.isnot(None)]
         if user:
+            user_email_prefix = user.email.split("@")[0] if (user.email and "@" in user.email) else user.email
             session_filter.append(or_(
                 PcapSessionModel.uploaded_by == user.email,
-                PcapSessionModel.uploaded_by == user.full_name
+                PcapSessionModel.uploaded_by == user.full_name,
+                PcapSessionModel.uploaded_by == user.id,
+                PcapSessionModel.uploaded_by.contains(user_email_prefix)
             ))
 
         # Total PCAP Sessions
@@ -229,18 +257,39 @@ class DashboardService:
         user = await self._get_user(user_id)
         ioc_filters = [IOCModel.is_deleted == False]
         if user:
-            user_session_ids_subq = select(PcapSessionModel.id).where(
+            user_email_prefix = user.email.split("@")[0] if (user.email and "@" in user.email) else user.email
+            from app.models.case import CaseModel
+            user_session_ids = select(PcapSessionModel.id).where(
                 or_(
                     PcapSessionModel.uploaded_by == user.email,
-                    PcapSessionModel.uploaded_by == user.full_name
+                    PcapSessionModel.uploaded_by == user.full_name,
+                    PcapSessionModel.uploaded_by == user.id,
+                    PcapSessionModel.uploaded_by.contains(user_email_prefix)
                 )
             )
-            ioc_filters.append(
+            user_evidence_ids = select(EvidenceArtifactModel.id).where(
                 or_(
-                    IOCModel.source_session.in_(user_session_ids_subq),
-                    IOCModel.deleted_by == user.id
+                    EvidenceArtifactModel.owner_investigator_id == user.id,
+                    EvidenceArtifactModel.uploaded_by == user.email,
+                    EvidenceArtifactModel.uploaded_by == user.full_name,
+                    EvidenceArtifactModel.uploaded_by.contains(user_email_prefix)
                 )
             )
+            user_incident_ids = select(IncidentModel.id).where(
+                or_(
+                    IncidentModel.assigned_analyst == user.full_name,
+                    IncidentModel.assigned_analyst == user.email,
+                    IncidentModel.assigned_analyst == user.id,
+                    IncidentModel.assigned_analyst.contains(user_email_prefix)
+                )
+            )
+            user_case_ids = select(CaseModel.id).where(CaseModel.created_by == user.id)
+            ioc_filters.append(or_(
+                IOCModel.source_session.in_(user_session_ids),
+                IOCModel.evidence_id.in_(user_evidence_ids),
+                IOCModel.incident_id.in_(user_incident_ids),
+                IOCModel.case_id.in_(user_case_ids)
+            ))
 
         res_total = await self.session.execute(select(func.count()).select_from(IOCModel).where(*ioc_filters))
         total_iocs = res_total.scalar_one() or 0

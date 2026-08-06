@@ -5,23 +5,46 @@ from app.models.pcap import PcapSessionModel, PacketModel, PcapExtractedFileMode
 from app.repositories.base import BaseRepository
 
 
+from sqlalchemy import select, or_
+from app.models.user import UserModel
+
+
 class PcapRepository(BaseRepository[PcapSessionModel]):
     """Async repository for PCAP sessions, packets, and extracted files."""
 
     def __init__(self, session: AsyncSession):
         super().__init__(PcapSessionModel, session)
 
+    def _build_user_filters(self, user: UserModel):
+        filters = [
+            PcapSessionModel.uploaded_by == user.email,
+            PcapSessionModel.uploaded_by == user.full_name,
+            PcapSessionModel.uploaded_by == user.id,
+        ]
+        if user.email and "@" in user.email:
+            filters.append(PcapSessionModel.uploaded_by.contains(user.email.split("@")[0]))
+        return filters
+
     async def create_session(self, **data) -> PcapSessionModel:
         """Instantiate and persist a new PCAP session."""
         return await self.create(**data)
 
-    async def get_session(self, session_id: str) -> Optional[PcapSessionModel]:
-        """Fetch single PCAP session by primary key ID."""
-        return await self.get_by_id(session_id)
+    async def get_session(self, session_id: str, user: Optional[UserModel] = None) -> Optional[PcapSessionModel]:
+        """Fetch single PCAP session by primary key ID with optional user filter."""
+        query = select(PcapSessionModel).where(PcapSessionModel.id == session_id)
+        if user:
+            query = query.where(or_(*self._build_user_filters(user)))
+        result = await self.session.execute(query)
+        return result.scalars().first()
 
-    async def list_sessions(self, skip: int = 0, limit: int = 100) -> List[PcapSessionModel]:
-        """List PCAP sessions with offset pagination."""
-        return await self.list(skip=skip, limit=limit)
+    async def list_sessions(self, user: Optional[UserModel] = None, skip: int = 0, limit: int = 100) -> List[PcapSessionModel]:
+        """List PCAP sessions with offset pagination and optional user filter."""
+        query = select(PcapSessionModel)
+        if user:
+            query = query.where(or_(*self._build_user_filters(user)))
+        query = query.offset(skip).limit(limit)
+        result = await self.session.execute(query)
+        return list(result.scalars().all())
 
     async def save_packet(self, **data) -> PacketModel:
         """Instantiate and persist a single packet record."""

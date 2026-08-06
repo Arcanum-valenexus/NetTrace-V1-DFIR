@@ -22,7 +22,7 @@ async def list_incidents(
 ):
     """Queries active incident telemetry with optional filters."""
     incident_service = IncidentService(db)
-    incidents = await incident_service.list_incidents(status=status, severity=severity, category=category)
+    incidents = await incident_service.list_incidents(status=status, severity=severity, category=category, user_id=token_data.sub)
     return ResponseEnvelope(success=True, data=incidents)
 
 
@@ -46,7 +46,7 @@ async def get_incident(
 ):
     """Fetches detailed incident telemetry including assets, timeline, and notes."""
     incident_service = IncidentService(db)
-    incident = await incident_service.get_incident_by_id(incident_id)
+    incident = await incident_service.get_incident_by_id(incident_id, user_id=token_data.sub)
     return ResponseEnvelope(success=True, data=incident)
 
 

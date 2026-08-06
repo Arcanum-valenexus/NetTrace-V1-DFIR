@@ -21,9 +21,8 @@ async def list_reports(
 ):
     """Lists generated DFIR forensics reports."""
     report_service = ReportService(db)
-    reports = await report_service.reports_repo.list_reports(incident_id=incident_id, case_id=case_id)
-    responses = [await report_service.get_report_by_id(r.id) for r in reports]
-    return ResponseEnvelope(success=True, data=responses)
+    reports = await report_service.list_reports(incident_id=incident_id, case_id=case_id, user_id=token_data.sub)
+    return ResponseEnvelope(success=True, data=reports)
 
 
 @router.post("/generate", response_model=ResponseEnvelope[ForensicsReportResponse], status_code=status.HTTP_201_CREATED, summary="Generate 15-Section Report")
@@ -46,7 +45,7 @@ async def get_report(
 ):
     """Fetches complete 15-section report object."""
     report_service = ReportService(db)
-    report = await report_service.get_report_by_id(report_id)
+    report = await report_service.get_report_by_id(report_id, user_id=token_data.sub)
     return ResponseEnvelope(success=True, data=report)
 
 
@@ -58,7 +57,7 @@ async def download_report_pdf(
 ):
     """Generates and streams a downloadable PDF file for a forensics report."""
     report_service = ReportService(db)
-    pdf_bytes = await report_service.generate_report_pdf(report_id)
+    pdf_bytes = await report_service.generate_report_pdf(report_id, user_id=token_data.sub)
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",

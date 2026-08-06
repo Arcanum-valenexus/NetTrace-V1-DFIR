@@ -13,6 +13,7 @@ class IncidentModel(Base, BaseModelMixin, SoftDeleteMixin):
     status: Mapped[str] = mapped_column(String(50), default="Investigating", index=True)
     category: Mapped[str] = mapped_column(String(100), nullable=False)
     assigned_analyst: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_by: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
     summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     attack_vector: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     current_stage: Mapped[str] = mapped_column(String(100), default="Initial Access")

@@ -1169,8 +1169,8 @@ export const InvestigationProvider: React.FC<{ children: React.ReactNode }> = ({
           info: p.info || '',
           threatRating: (p.info || '').toLowerCase().includes('exploit') || (p.info || '').toLowerCase().includes('c2') || (p.info || '').toLowerCase().includes('malicious') ? 'Malicious' : 'Benign',
           flags: p.tcpFlags ? [p.tcpFlags] : ['ACK'],
-          payloadHex: '45 00 00 3c a2 11 40 00 40 06 ... Scapy Dissected Payload',
-          asciiStream: p.info || `[Dissected ${p.protocol} Packet #${p.packetNumber}]`
+          payloadHex: (p as any).payloadHex || (p as any).payload_hex || '45 00 00 3c a2 11 40 00 40 06 ... Scapy Dissected Payload',
+          asciiStream: (p as any).payloadAscii || (p as any).payload_ascii || p.info || `[Dissected ${p.protocol} Packet #${p.packetNumber}]`
         }));
 
         setPcapSession(prev => ({

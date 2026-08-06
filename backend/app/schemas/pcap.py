@@ -65,6 +65,8 @@ class PacketResponseSchema(BaseSchema):
     packetLength: int
     info: Optional[str] = None
     tcpFlags: Optional[str] = None
+    payloadHex: Optional[str] = None
+    payloadAscii: Optional[str] = None
 
 
 class PacketDetailResponseSchema(PacketResponseSchema):

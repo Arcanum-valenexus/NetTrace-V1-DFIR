@@ -47,7 +47,7 @@ async def list_pcap_sessions(
 ):
     """Lists all active PCAP sessions."""
     pcap_service = PcapService(db)
-    sessions = await pcap_service.list_sessions(skip=skip, limit=limit)
+    sessions = await pcap_service.list_sessions(user_id=token_data.sub, skip=skip, limit=limit)
     return ResponseEnvelope(success=True, data=sessions)
 
 
@@ -59,7 +59,7 @@ async def get_pcap_session(
 ):
     """Fetches details for a specific PCAP session."""
     pcap_service = PcapService(db)
-    session_data = await pcap_service.get_session(session_id)
+    session_data = await pcap_service.get_session(session_id, user_id=token_data.sub)
     return ResponseEnvelope(success=True, data=session_data)
 
 
@@ -73,7 +73,7 @@ async def list_pcap_packets(
 ):
     """Lists packets for a PCAP session."""
     pcap_service = PcapService(db)
-    packet_data = await pcap_service.list_packets(session_id=session_id, skip=skip, limit=limit)
+    packet_data = await pcap_service.list_packets(session_id=session_id, user_id=token_data.sub, skip=skip, limit=limit)
     return ResponseEnvelope(success=True, data=packet_data)
 
 
@@ -86,5 +86,5 @@ async def get_packet_detail(
 ):
     """Fetches detailed packet metadata along with Hex and ASCII payload streams."""
     pcap_service = PcapService(db)
-    packet_detail = await pcap_service.get_packet_detail(session_id=session_id, packet_number=packetNumber)
+    packet_detail = await pcap_service.get_packet_detail(session_id=session_id, packet_number=packetNumber, user_id=token_data.sub)
     return ResponseEnvelope(success=True, data=packet_detail)

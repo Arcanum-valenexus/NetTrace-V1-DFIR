@@ -12,6 +12,10 @@ from app.repositories.audit_repository import AuditRepository
 from app.schemas.reports import ForensicsReportResponse, ReportGenerateRequestSchema
 
 
+from app.models.user import UserModel
+from sqlalchemy import select, or_
+
+
 class ReportService:
     """Service generating and versioning 15-Section DFIR Forensics Reports."""
 
@@ -22,10 +26,26 @@ class ReportService:
         self.evidence_repo = EvidenceRepository(session)
         self.audit_repo = AuditRepository(session)
 
+    async def _get_user(self, user_id: Optional[str]) -> Optional[UserModel]:
+        if not user_id:
+            return None
+        res = await self.session.execute(
+            select(UserModel).where(
+                or_(
+                    UserModel.id == user_id,
+                    UserModel.email == user_id,
+                    UserModel.full_name == user_id
+                )
+            )
+        )
+        return res.scalars().first()
+
     async def generate_report(self, payload: ReportGenerateRequestSchema, actor_id: str) -> ForensicsReportResponse:
         """Compiles a complete 15-section DFIR report in an atomic transaction."""
-        async with self.session.begin():
-            incident = await self.incidents_repo.get_incident_details(payload.incident_id)
+        user = await self._get_user(actor_id)
+        
+        async def _do_generate():
+            incident = await self.incidents_repo.get_incident_details(payload.incident_id, user=user)
             if not incident:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incident not found.")
 
@@ -34,10 +54,9 @@ class ReportService:
 
             from app.repositories.pcap_repository import PcapRepository
             pcap_repo = PcapRepository(self.session)
-            pcap_sessions = await pcap_repo.list_sessions(limit=100)
+            pcap_sessions = await pcap_repo.list_sessions(user=user, limit=100)
             target_session = None
             if pcap_sessions:
-                # Pick the most recent session
                 target_session = pcap_sessions[-1]
 
             packet_analysis_data = {
@@ -55,43 +74,32 @@ class ReportService:
 
             from app.repositories.ioc_repository import IOCRepository
             ioc_repo = IOCRepository(self.session)
-            all_iocs = await ioc_repo.list_iocs(limit=1000)
+            all_iocs = await ioc_repo.list_iocs(user=user, limit=1000)
 
-            suspicious_ips = [i.value for i in all_iocs if i.type in ("IPv4", "IPv6")]
-            suspicious_domains = [i.value for i in all_iocs if i.type == "Domain"]
-            suspicious_hashes = [i.value for i in all_iocs if i.type in ("MD5", "SHA1", "SHA256")]
+            ioc_items = [
+                {
+                    "id": i.id,
+                    "type": i.type,
+                    "value": i.value,
+                    "status": i.status,
+                    "severity": i.severity,
+                    "category": i.category,
+                    "firstSeen": i.first_seen,
+                }
+                for i in all_iocs[:20]
+            ]
 
-            sev_dist = {
-                "Critical": len([i for i in all_iocs if i.severity == "Critical"]),
-                "High": len([i for i in all_iocs if i.severity == "High"]),
-                "Medium": len([i for i in all_iocs if i.severity == "Medium"]),
-                "Low": len([i for i in all_iocs if i.severity == "Low"]),
-            }
-
-            ioc_report_data = {
-                "summary": f"Identified {len(all_iocs)} total Indicators of Compromise from forensic network capture telemetry.",
-                "iocCount": len(all_iocs),
-                "severityDistribution": sev_dist,
-                "affectedEvidence": list(set([i.evidence_id for i in all_iocs if i.evidence_id])),
-                "affectedSessions": list(set([i.source_session for i in all_iocs if i.source_session])),
-                "affectedIncidents": list(set([i.incident_id for i in all_iocs if i.incident_id])),
-                "topIocTypes": list(set([i.type for i in all_iocs])),
-                "suspiciousDomains": suspicious_domains[:10],
-                "suspiciousIps": suspicious_ips[:10],
-                "hashes": suspicious_hashes[:10],
-                "items": [
-                    {
-                        "id": i.id,
-                        "type": i.type,
-                        "value": i.value,
-                        "status": i.status,
-                        "severity": i.severity,
-                        "category": i.category,
-                        "firstSeen": i.first_seen,
-                    }
-                    for i in all_iocs[:20]
-                ]
-            }
+            evidences = await self.evidence_repo.list_evidence(user=user, limit=100)
+            evidence_inv = [
+                {
+                    "name": e.name,
+                    "category": e.category,
+                    "sizeBytes": e.size_bytes,
+                    "hashSha256": e.hash_sha256,
+                    "uploadedAt": e.uploaded_at,
+                }
+                for e in evidences
+            ]
 
             sections = {
                 "coverPage": {
@@ -114,9 +122,9 @@ class ReportService:
                     "impactedAssets": [{"hostname": a.hostname, "ipAddress": a.ip_address, "status": a.status, "os": a.os} for a in incident.impacted_assets],
                 },
                 "attackTimeline": [{"timestamp": t.timestamp, "source": t.source, "eventType": t.event_type, "description": t.description} for t in incident.timeline_events],
-                "evidenceInventory": [],
+                "evidenceInventory": evidence_inv,
                 "packetAnalysis": packet_analysis_data,
-                "iocs": ioc_report_data,
+                "iocs": ioc_items,
                 "rootCauseAnalysis": {
                     "primaryVector": incident.attack_vector or "Initial Access",
                     "exploitedVulnerabilities": "NTLM Relay Exploitation",
@@ -168,16 +176,29 @@ class ReportService:
                 action="GENERATE_REPORT",
                 details={"report_id": report.id, "report_number": report.report_number},
             )
+            return report.id
 
-            return await self.get_report_by_id(report.id)
+        if not self.session.in_transaction():
+            async with self.session.begin():
+                rep_id = await _do_generate()
+        else:
+            rep_id = await _do_generate()
+            await self.session.commit()
 
-    async def get_report_by_id(self, report_id: str) -> ForensicsReportResponse:
-        """Fetch complete report object."""
-        report = await self.reports_repo.get_report_details(report_id)
+        return await self.get_report_by_id(rep_id, user_id=actor_id)
+
+    async def get_report_by_id(self, report_id: str, user_id: Optional[str] = None) -> ForensicsReportResponse:
+        """Fetch complete report object enforcing user ownership."""
+        user = await self._get_user(user_id) if user_id else None
+        report = await self.reports_repo.get_report_details(report_id, user=user)
         if not report:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found.")
 
-        sec = report.sections_json
+        sec = report.sections_json or {}
+
+        raw_iocs = sec.get("iocs", [])
+        if isinstance(raw_iocs, dict):
+            raw_iocs = raw_iocs.get("items", [])
 
         return ForensicsReportResponse(
             id=report.id,
@@ -200,7 +221,7 @@ class ReportService:
             attackTimeline=sec.get("attackTimeline", []),
             evidenceInventory=sec.get("evidenceInventory", []),
             packetAnalysis=sec.get("packetAnalysis", {}),
-            iocs=sec.get("iocs", []),
+            iocs=raw_iocs if isinstance(raw_iocs, list) else [],
             rootCauseAnalysis=sec.get("rootCauseAnalysis", {}),
             containmentAndRecovery=sec.get("containmentAndRecovery", {}),
             remediationRecommendations=sec.get("remediationRecommendations", []),
@@ -211,10 +232,64 @@ class ReportService:
             references=sec.get("references", []),
         )
 
+    async def list_reports(
+        self,
+        incident_id: Optional[str] = None,
+        case_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> List[ForensicsReportResponse]:
+        """List active forensics reports filtered by user identity."""
+        user = await self._get_user(user_id) if user_id else None
+        reports = await self.reports_repo.list_reports(incident_id=incident_id, case_id=case_id, user=user, skip=skip, limit=limit)
+        results = []
+        for r in reports:
+            sec = r.sections_json or {}
+            raw_iocs = sec.get("iocs", [])
+            if isinstance(raw_iocs, dict):
+                raw_iocs = raw_iocs.get("items", [])
+            results.append(
+                ForensicsReportResponse(
+                    id=r.id,
+                    reportNumber=r.report_number,
+                    version=r.version,
+                    revisionReason=r.revision_reason,
+                    revisionDate=r.revision_date,
+                    incidentId=r.incident_id,
+                    caseId=r.case_id,
+                    incidentTitle=r.incident_title,
+                    generatedAt=r.generated_at,
+                    generatedBy=r.generated_by,
+                    organization=r.organization,
+                    status=r.status,
+                    reportHash=r.report_hash,
+                    history=[{"id": h.id, "event": h.event, "timestamp": h.timestamp, "actor": h.actor, "notes": h.notes} for h in r.history],
+                    coverPage=sec.get("coverPage", {}),
+                    executiveSummary=sec.get("executiveSummary", ""),
+                    incidentCaseDetails=sec.get("incidentCaseDetails", {}),
+                    attackTimeline=sec.get("attackTimeline", []),
+                    evidenceInventory=sec.get("evidenceInventory", []),
+                    packetAnalysis=sec.get("packetAnalysis", {}),
+                    iocs=raw_iocs if isinstance(raw_iocs, list) else [],
+                    rootCauseAnalysis=sec.get("rootCauseAnalysis", {}),
+                    containmentAndRecovery=sec.get("containmentAndRecovery", {}),
+                    remediationRecommendations=sec.get("remediationRecommendations", []),
+                    evidenceIntegrity=sec.get("evidenceIntegrity", []),
+                    chainOfCustodySummary=sec.get("chainOfCustodySummary", []),
+                    investigatorNotes=sec.get("investigatorNotes", []),
+                    appendix=sec.get("appendix", ""),
+                    references=sec.get("references", []),
+                )
+            )
+        return results
+
     async def create_revision(self, report_id: str, revision_reason: str, actor_id: str) -> ForensicsReportResponse:
-        """Creates a new report revision version."""
-        async with self.session.begin():
-            report = await self.reports_repo.get_by_id(report_id)
+        """Creates a new report revision version enforcing ownership."""
+        user = await self._get_user(actor_id)
+        
+        async def _do_revision():
+            report = await self.reports_repo.get_report_details(report_id, user=user)
             if not report:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found.")
 
@@ -239,11 +314,18 @@ class ReportService:
                 details={"report_id": report_id, "new_version": report.version},
             )
 
-            return await self.get_report_by_id(report_id)
+        if not self.session.in_transaction():
+            async with self.session.begin():
+                await _do_revision()
+        else:
+            await _do_revision()
+            await self.session.commit()
 
-    async def generate_report_pdf(self, report_id: str) -> bytes:
-        """Generates downloadable PDF byte stream for a forensics report."""
-        report_response = await self.get_report_by_id(report_id)
+        return await self.get_report_by_id(report_id, user_id=actor_id)
+
+    async def generate_report_pdf(self, report_id: str, user_id: Optional[str] = None) -> bytes:
+        """Generates downloadable PDF byte stream for a forensics report enforcing ownership."""
+        report_response = await self.get_report_by_id(report_id, user_id=user_id)
         report_dict = report_response.model_dump()
         from app.utils.pdf_generator import generate_dfir_report_pdf
         return generate_dfir_report_pdf(report_dict)
