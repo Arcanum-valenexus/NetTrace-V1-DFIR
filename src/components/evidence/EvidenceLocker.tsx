@@ -269,9 +269,9 @@ This file represents verified digital forensic evidence extracted in NetTrace V1
   const sortedCocEntries = activeArtifact ? [...(activeArtifact.chainOfCustody || [])] : [];
 
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto font-sans text-slate-200">
+    <div className="p-4 md:p-6 space-y-6 w-full max-w-full mx-auto font-sans text-slate-200 min-w-0">
       {/* Header Banner */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-2xl">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-2xl w-full min-w-0">
         <div className="space-y-1">
           <div className="flex items-center space-x-2">
             <h1 className="text-xl font-bold text-slate-100 flex items-center space-x-2 font-heading tracking-tight">
@@ -298,7 +298,7 @@ This file represents verified digital forensic evidence extracted in NetTrace V1
       </div>
 
       {/* Search & Category Filter Toolbar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-900/80 border border-slate-800 p-3 rounded-xl shadow-md">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-900/80 border border-slate-800 p-3 rounded-xl shadow-md w-full min-w-0">
         <div className="relative w-full sm:w-80">
           <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
           <input
@@ -333,21 +333,21 @@ This file represents verified digital forensic evidence extracted in NetTrace V1
         </div>
       </div>
 
-      {/* Main Evidence Layout: Left Table + Right Details & Custody Log */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      {/* Main Evidence Layout: Three Side-by-Side Panels */}
+      <div className="grid w-full min-w-0 grid-cols-1 lg:grid-cols-3 gap-6 [grid-template-columns:1fr] lg:[grid-template-columns:repeat(3,minmax(0,1fr))]">
         
-        {/* Left 7 Cols: Evidence Repository Table */}
-        <div className="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-            <div className="flex items-center space-x-2">
-              <HardDrive className="w-4 h-4 text-cyan-400" />
-              <h2 className="text-sm font-bold text-slate-100 font-heading">
+        {/* Panel 1: Registered Digital Evidence Table */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4 flex flex-col w-full min-w-0">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3 gap-2 min-w-0">
+            <div className="flex items-center space-x-2 min-w-0">
+              <HardDrive className="w-4 h-4 text-cyan-400 shrink-0" />
+              <h2 className="text-sm font-bold text-slate-100 font-heading truncate">
                 Registered Digital Evidence ({filteredEvidence.length})
               </h2>
             </div>
-            <span className="text-[10px] text-emerald-400 bg-emerald-950/80 px-2.5 py-1 rounded-md border border-emerald-800 font-mono flex items-center space-x-1">
+            <span className="text-[10px] text-emerald-400 bg-emerald-950/80 px-2.5 py-1 rounded-md border border-emerald-800 font-mono flex items-center space-x-1 shrink-0">
               <ShieldCheck className="w-3 h-3 text-emerald-400" />
-              <span>SHA-256 BASELINE LOCKED</span>
+              <span>LOCKED BASELINE</span>
             </span>
           </div>
 
@@ -360,8 +360,8 @@ This file represents verified digital forensic evidence extracted in NetTrace V1
               onAction={() => setShowAddModal(true)}
             />
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-slate-800 font-sans">
-              <table id="table-evidence-list" className="w-full text-left text-xs border-collapse">
+            <div className="overflow-x-auto rounded-xl border border-slate-800 font-sans flex-1 w-full min-w-0">
+              <table id="table-evidence-list" className="w-full text-left text-xs border-collapse min-w-0">
                 <thead className="bg-slate-950 text-slate-400 border-b border-slate-800 uppercase text-[10px] tracking-wider font-semibold">
                   <tr>
                     <th className="p-3">Artifact Name</th>
@@ -386,7 +386,7 @@ This file represents verified digital forensic evidence extracted in NetTrace V1
                         }`}
                       >
                         {/* Artifact Name + Case ID Badge */}
-                        <td className="p-3 max-w-xs">
+                        <td className="p-3 max-w-xs min-w-0">
                           <div className="font-mono font-bold text-slate-100 truncate flex items-center space-x-1.5">
                             {item.accessPassword && (
                               <Lock className="w-3 h-3 text-amber-400 shrink-0" title="Password Protected Metadata" />
@@ -394,9 +394,9 @@ This file represents verified digital forensic evidence extracted in NetTrace V1
                             <span className="truncate">{item.name}</span>
                           </div>
                           <div className="flex items-center space-x-2 text-[10px] text-slate-400 mt-0.5">
-                            <span className="font-mono text-cyan-400">{item.caseId}</span>
+                            <span className="font-mono text-cyan-400 truncate">{item.caseId}</span>
                             <span>•</span>
-                            <span className="font-mono text-slate-500">{item.id}</span>
+                            <span className="font-mono text-slate-500 truncate">{item.id}</span>
                           </div>
                         </td>
 
@@ -422,7 +422,7 @@ This file represents verified digital forensic evidence extracted in NetTrace V1
 
                         {/* Actions */}
                         <td className="p-3 text-right">
-                          <div className="flex items-center justify-end space-x-1">
+                          <div className="flex flex-wrap items-center justify-end gap-1">
                             {/* 1. Preview */}
                             <button
                               id={`btn-preview-${item.id}`}
@@ -431,7 +431,7 @@ This file represents verified digital forensic evidence extracted in NetTrace V1
                                 setSelectedArtifactId(item.id);
                                 setShowPreviewModal(true);
                               }}
-                              className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 rounded text-[10px] font-bold flex items-center space-x-1"
+                              className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 rounded text-[10px] font-bold flex items-center space-x-1 shrink-0"
                               title="Preview Header & Metadata"
                             >
                               <Eye className="w-3 h-3" />
@@ -445,7 +445,7 @@ This file represents verified digital forensic evidence extracted in NetTrace V1
                                 e.stopPropagation();
                                 handleDownload(item);
                               }}
-                              className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded text-[10px] font-bold flex items-center space-x-1"
+                              className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded text-[10px] font-bold flex items-center space-x-1 shrink-0"
                               title="Download Artifact"
                             >
                               <Download className="w-3 h-3" />
@@ -460,25 +460,25 @@ This file represents verified digital forensic evidence extracted in NetTrace V1
                                 setSelectedArtifactId(item.id);
                                 setShowVerifyModal(true);
                               }}
-                              className="px-2 py-1 bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-800 rounded text-[10px] font-bold flex items-center space-x-1"
+                              className="px-2 py-1 bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-800 rounded text-[10px] font-bold flex items-center space-x-1 shrink-0"
                               title="Verify Cryptographic Hash"
                             >
                               <ShieldCheck className="w-3 h-3" />
                               <span className="hidden sm:inline">Verify</span>
                             </button>
 
-                            {/* 4. NEW: Edit Metadata */}
+                            {/* 4. Edit Metadata */}
                             <button
                               id={`btn-edit-metadata-${item.id}`}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleRequestPasswordAction(item, 'edit');
                               }}
-                              className="px-2 py-1 bg-amber-950 hover:bg-amber-900 text-amber-300 border border-amber-800/80 rounded text-[10px] font-bold flex items-center space-x-1"
+                              className="px-2 py-1 bg-amber-950 hover:bg-amber-900 text-amber-300 border border-amber-800/80 rounded text-[10px] font-bold flex items-center space-x-1 shrink-0"
                               title="Edit Metadata (Requires Password)"
                             >
                               <LockKeyhole className="w-3 h-3 text-amber-400" />
-                              <span>Edit Metadata</span>
+                              <span>Edit</span>
                             </button>
                           </div>
                         </td>
@@ -491,262 +491,258 @@ This file represents verified digital forensic evidence extracted in NetTrace V1
           )}
         </div>
 
-        {/* Right 5 Cols: Artifact Details & Chain of Custody Timeline */}
-        <div className="lg:col-span-5 space-y-6">
-          
-          {/* Artifact Details Panel */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center space-x-2">
-                <FileText className="w-4 h-4 text-cyan-400" />
-                <h2 className="text-sm font-bold text-slate-100 font-heading">Artifact Details</h2>
-              </div>
-              {activeArtifact && (
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => handleRequestPasswordAction(activeArtifact, 'edit')}
-                    className="px-2 py-1 bg-amber-950 hover:bg-amber-900 text-amber-300 border border-amber-800 rounded text-[10px] font-bold flex items-center space-x-1"
-                  >
-                    <Edit3 className="w-3 h-3" />
-                    <span>Edit Metadata</span>
-                  </button>
-                </div>
-              )}
+        {/* Panel 2: Artifact Details Panel */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4 flex flex-col w-full min-w-0">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3 gap-2 min-w-0">
+            <div className="flex items-center space-x-2 min-w-0">
+              <FileText className="w-4 h-4 text-cyan-400 shrink-0" />
+              <h2 className="text-sm font-bold text-slate-100 font-heading truncate">Artifact Details</h2>
             </div>
-
-            {activeArtifact ? (
-              <div className="space-y-4 text-xs">
-                {/* Core Header Card */}
-                <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl space-y-3">
-                  <div>
-                    <span className="text-[10px] text-slate-500 uppercase font-semibold">Evidence Name:</span>
-                    <p className="font-bold text-cyan-300 text-sm font-mono break-all">{activeArtifact.name}</p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 text-[11px] pt-1 border-t border-slate-900">
-                    <div>
-                      <span className="text-slate-500 text-[10px] block">Case ID:</span>
-                      <span className="font-mono text-cyan-400 font-bold">{activeArtifact.caseId}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-500 text-[10px] block">Evidence ID:</span>
-                      <span className="font-mono text-slate-300">{activeArtifact.id}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-500 text-[10px] block">Category:</span>
-                      <span className="text-slate-200 font-medium">{activeArtifact.category}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-500 text-[10px] block">Upload Date:</span>
-                      <span className="text-slate-300 font-mono text-[10px]">{activeArtifact.uploadedAt}</span>
-                    </div>
-                  </div>
-
-                  {/* Status / Integrity Badge */}
-                  <div className="pt-2 border-t border-slate-900 flex items-center justify-between">
-                    <span className="text-slate-500 text-[10px]">Status / Integrity:</span>
-                    <span className="px-2 py-0.5 bg-emerald-950 text-emerald-400 border border-emerald-800 rounded text-[10px] font-bold flex items-center space-x-1">
-                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>VERIFIED (Baseline Intact)</span>
-                    </span>
-                  </div>
-                </div>
-
-                {/* Hashes Box */}
-                <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl space-y-2">
-                  <span className="text-[10px] text-slate-500 uppercase font-semibold block">Cryptographic Checksums:</span>
-                  
-                  <div className="space-y-1.5 font-mono text-[10px]">
-                    <div className="flex items-center justify-between bg-slate-900/90 p-2 rounded border border-slate-800">
-                      <div className="truncate pr-2">
-                        <span className="text-slate-500 block text-[9px]">SHA-256:</span>
-                        <span className="text-slate-200 break-all">{activeArtifact.hashSha256}</span>
-                      </div>
-                      <button 
-                        onClick={() => handleCopy(activeArtifact.hashSha256, 'SHA-256')} 
-                        className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-cyan-300 shrink-0"
-                        title="Copy SHA-256"
-                      >
-                        {copiedHash === 'SHA-256' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                      </button>
-                    </div>
-
-                    <div className="flex items-center justify-between bg-slate-900/90 p-2 rounded border border-slate-800">
-                      <div className="truncate pr-2">
-                        <span className="text-slate-500 block text-[9px]">MD5:</span>
-                        <span className="text-slate-300 break-all">{activeArtifact.hashMd5}</span>
-                      </div>
-                      <button 
-                        onClick={() => handleCopy(activeArtifact.hashMd5, 'MD5')} 
-                        className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-cyan-300 shrink-0"
-                        title="Copy MD5"
-                      >
-                        {copiedHash === 'MD5' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Description & Tags */}
-                <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl space-y-2">
-                  <div>
-                    <span className="text-[10px] text-slate-500 uppercase block mb-1">Description:</span>
-                    <p className="text-slate-300 text-xs leading-relaxed font-sans">
-                      {activeArtifact.description || 'No detailed description provided for this evidence item.'}
-                    </p>
-                  </div>
-
-                  <div className="pt-2 border-t border-slate-900">
-                    <span className="text-[10px] text-slate-500 uppercase block mb-1.5">Optional Tags:</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {activeArtifact.tags && activeArtifact.tags.length > 0 ? (
-                        activeArtifact.tags.map((tag, idx) => (
-                          <span key={idx} className="px-2 py-0.5 bg-cyan-950/80 text-cyan-300 border border-cyan-800/80 rounded text-[10px] flex items-center space-x-1 font-mono">
-                            <Tag className="w-2.5 h-2.5 text-cyan-400" />
-                            <span>{tag}</span>
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-slate-500 text-[11px] italic">No tags assigned</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Password Protection Status Banner */}
-                <div className="p-3 bg-amber-950/30 border border-amber-900/50 rounded-xl flex items-center justify-between text-xs">
-                  <div className="flex items-center space-x-2">
-                    <Lock className="w-4 h-4 text-amber-400 shrink-0" />
-                    <div>
-                      <p className="text-amber-200 font-bold text-[11px]">Protected Metadata & Management</p>
-                      <p className="text-slate-400 text-[10px]">Editing metadata requires Evidence Password verification.</p>
-                    </div>
-                  </div>
-                </div>
+            {activeArtifact && (
+              <div className="flex items-center space-x-2 shrink-0">
+                <button
+                  onClick={() => handleRequestPasswordAction(activeArtifact, 'edit')}
+                  className="px-2 py-1 bg-amber-950 hover:bg-amber-900 text-amber-300 border border-amber-800 rounded text-[10px] font-bold flex items-center space-x-1"
+                >
+                  <Edit3 className="w-3 h-3" />
+                  <span>Edit Metadata</span>
+                </button>
               </div>
-            ) : (
-              <EmptyState
-                icon={Archive}
-                title="No Artifact Selected"
-                description="Select an artifact from the table to view detailed properties."
-              />
             )}
           </div>
 
-          {/* Chain of Custody Timeline Section */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center space-x-2">
-                <History className="w-4 h-4 text-cyan-400" />
-                <h2 className="text-sm font-bold text-slate-100 font-heading">Chain of Custody Audit Log</h2>
+          {activeArtifact ? (
+            <div className="space-y-4 text-xs w-full min-w-0">
+              {/* Core Header Card */}
+              <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl space-y-3 w-full min-w-0">
+                <div>
+                  <span className="text-[10px] text-slate-500 uppercase font-semibold">Evidence Name:</span>
+                  <p className="font-bold text-cyan-300 text-sm font-mono break-all">{activeArtifact.name}</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-[11px] pt-1 border-t border-slate-900 min-w-0">
+                  <div className="min-w-0">
+                    <span className="text-slate-500 text-[10px] block">Case ID:</span>
+                    <span className="font-mono text-cyan-400 font-bold break-all">{activeArtifact.caseId}</span>
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-slate-500 text-[10px] block">Evidence ID:</span>
+                    <span className="font-mono text-slate-300 break-all">{activeArtifact.id}</span>
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-slate-500 text-[10px] block">Category:</span>
+                    <span className="text-slate-200 font-medium break-words">{activeArtifact.category}</span>
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-slate-500 text-[10px] block">Upload Date:</span>
+                    <span className="text-slate-300 font-mono text-[10px] break-words">{activeArtifact.uploadedAt}</span>
+                  </div>
+                </div>
+
+                {/* Status / Integrity Badge */}
+                <div className="pt-2 border-t border-slate-900 flex items-center justify-between gap-2 min-w-0">
+                  <span className="text-slate-500 text-[10px] shrink-0">Status / Integrity:</span>
+                  <span className="px-2 py-0.5 bg-emerald-950 text-emerald-400 border border-emerald-800 rounded text-[10px] font-bold flex items-center space-x-1 shrink-0">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>VERIFIED (Baseline Intact)</span>
+                  </span>
+                </div>
               </div>
-              <span className="text-[10px] text-cyan-400 bg-cyan-950 px-2 py-0.5 rounded border border-cyan-800 font-mono">
-                {sortedCocEntries.length} Events Logged
-              </span>
+
+              {/* Hashes Box */}
+              <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl space-y-2 w-full min-w-0">
+                <span className="text-[10px] text-slate-500 uppercase font-semibold block">Cryptographic Checksums:</span>
+                
+                <div className="space-y-1.5 font-mono text-[10px] w-full min-w-0">
+                  <div className="flex items-center justify-between bg-slate-900/90 p-2 rounded border border-slate-800 min-w-0 gap-2">
+                    <div className="pr-2 min-w-0 flex-1">
+                      <span className="text-slate-500 block text-[9px]">SHA-256:</span>
+                      <span className="text-slate-200 break-all block text-[10px]">{activeArtifact.hashSha256}</span>
+                    </div>
+                    <button 
+                      onClick={() => handleCopy(activeArtifact.hashSha256, 'SHA-256')} 
+                      className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-cyan-300 shrink-0"
+                      title="Copy SHA-256"
+                    >
+                      {copiedHash === 'SHA-256' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between bg-slate-900/90 p-2 rounded border border-slate-800 min-w-0 gap-2">
+                    <div className="pr-2 min-w-0 flex-1">
+                      <span className="text-slate-500 block text-[9px]">MD5:</span>
+                      <span className="text-slate-300 break-all block text-[10px]">{activeArtifact.hashMd5}</span>
+                    </div>
+                    <button 
+                      onClick={() => handleCopy(activeArtifact.hashMd5, 'MD5')} 
+                      className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-cyan-300 shrink-0"
+                      title="Copy MD5"
+                    >
+                      {copiedHash === 'MD5' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Description & Tags */}
+              <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl space-y-2 w-full min-w-0">
+                <div>
+                  <span className="text-[10px] text-slate-500 uppercase block mb-1">Description:</span>
+                  <p className="text-slate-300 text-xs leading-relaxed font-sans break-words">
+                    {activeArtifact.description || 'No detailed description provided for this evidence item.'}
+                  </p>
+                </div>
+
+                <div className="pt-2 border-t border-slate-900">
+                  <span className="text-[10px] text-slate-500 uppercase block mb-1.5">Optional Tags:</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {activeArtifact.tags && activeArtifact.tags.length > 0 ? (
+                      activeArtifact.tags.map((tag, idx) => (
+                        <span key={idx} className="px-2 py-0.5 bg-cyan-950/80 text-cyan-300 border border-cyan-800/80 rounded text-[10px] flex items-center space-x-1 font-mono break-all">
+                          <Tag className="w-2.5 h-2.5 text-cyan-400 shrink-0" />
+                          <span>{tag}</span>
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-slate-500 text-[11px] italic">No tags assigned</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Password Protection Status Banner */}
+              <div className="p-3 bg-amber-950/30 border border-amber-900/50 rounded-xl flex items-center justify-between text-xs w-full min-w-0">
+                <div className="flex items-center space-x-2 min-w-0">
+                  <Lock className="w-4 h-4 text-amber-400 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-amber-200 font-bold text-[11px]">Protected Metadata & Management</p>
+                    <p className="text-slate-400 text-[10px]">Editing metadata requires Evidence Password verification.</p>
+                  </div>
+                </div>
+              </div>
             </div>
+          ) : (
+            <EmptyState
+              icon={Archive}
+              title="No Artifact Selected"
+              description="Select an artifact from the table to view detailed properties."
+            />
+          )}
+        </div>
 
-            {activeArtifact ? (
-              <div className="space-y-4 text-xs font-sans">
-                {/* Append Custody Event Form */}
-                <form id="form-append-custody" onSubmit={handleAddCocEvent} className="space-y-2 bg-slate-950 p-3 rounded-xl border border-slate-800">
-                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Append Custody Event:</span>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[10px] text-slate-400 block mb-1">Event Action:</label>
-                      <select
-                        value={cocAction}
-                        onChange={(e) => setCocAction(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
-                      >
-                        <option value="Custody Transfer / Analysis">Custody Transfer / Analysis</option>
-                        <option value="Evidence Verified">Evidence Verified</option>
-                        <option value="Metadata Updated">Metadata Updated</option>
-                        <option value="Volatile Memory Analysis">Volatile Memory Analysis</option>
-                        <option value="Network PCAP Parsing">Network PCAP Parsing</option>
-                        <option value="Evidentiary Hash Audit">Evidentiary Hash Audit</option>
-                        <option value="Court Evidence Presentation">Court Evidence Presentation</option>
-                      </select>
-                    </div>
+        {/* Panel 3: Chain of Custody Audit Log Section */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4 flex flex-col w-full min-w-0">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3 gap-2 min-w-0">
+            <div className="flex items-center space-x-2 min-w-0">
+              <History className="w-4 h-4 text-cyan-400 shrink-0" />
+              <h2 className="text-sm font-bold text-slate-100 font-heading truncate">Chain of Custody Audit Log</h2>
+            </div>
+            <span className="text-[10px] text-cyan-400 bg-cyan-950 px-2 py-0.5 rounded border border-cyan-800 font-mono shrink-0">
+              {sortedCocEntries.length} Events Logged
+            </span>
+          </div>
 
-                    <div>
-                      <label className="text-[10px] text-slate-400 block mb-1">Investigator Name:</label>
-                      <input
-                        type="text"
-                        disabled
-                        value={`${userProfile.fullName || 'Lead DFIR Analyst'} (Logged in)`}
-                        className="w-full bg-slate-900/60 border border-slate-800 rounded-lg p-2 text-xs text-slate-400 cursor-not-allowed"
-                      />
-                    </div>
+          {activeArtifact ? (
+            <div className="space-y-4 text-xs font-sans w-full min-w-0">
+              {/* Append Custody Event Form */}
+              <form id="form-append-custody" onSubmit={handleAddCocEvent} className="space-y-2 bg-slate-950 p-3 rounded-xl border border-slate-800 w-full min-w-0">
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">Append Custody Event:</span>
+                
+                <div className="grid grid-cols-1 gap-2">
+                  <div>
+                    <label className="text-[10px] text-slate-400 block mb-1">Event Action:</label>
+                    <select
+                      value={cocAction}
+                      onChange={(e) => setCocAction(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
+                    >
+                      <option value="Custody Transfer / Analysis">Custody Transfer / Analysis</option>
+                      <option value="Evidence Verified">Evidence Verified</option>
+                      <option value="Metadata Updated">Metadata Updated</option>
+                      <option value="Volatile Memory Analysis">Volatile Memory Analysis</option>
+                      <option value="Network PCAP Parsing">Network PCAP Parsing</option>
+                      <option value="Evidentiary Hash Audit">Evidentiary Hash Audit</option>
+                      <option value="Court Evidence Presentation">Court Evidence Presentation</option>
+                    </select>
                   </div>
 
                   <div>
-                    <label className="text-[10px] text-slate-400 block mb-1">Custody Notes / Description:</label>
+                    <label className="text-[10px] text-slate-400 block mb-1">Investigator Name:</label>
                     <input
-                      id="input-coc-notes"
                       type="text"
-                      value={cocNotes}
-                      onChange={(e) => setCocNotes(e.target.value)}
-                      placeholder="e.g. Conducted YARA memory scan for LSASS process injection..."
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
+                      disabled
+                      value={`${userProfile.fullName || 'Lead DFIR Analyst'} (Logged in)`}
+                      className="w-full bg-slate-900/60 border border-slate-800 rounded-lg p-2 text-xs text-slate-400 cursor-not-allowed"
                     />
                   </div>
-
-                  <button
-                    id="btn-append-custody"
-                    type="submit"
-                    className="w-full py-2 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold rounded-lg text-xs transition-all shadow-md font-sans flex items-center justify-center space-x-1"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Append Custody Event</span>
-                  </button>
-                </form>
-
-                {/* Custody Timeline (Newest Event First) */}
-                <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
-                  {sortedCocEntries.length > 0 ? (
-                    sortedCocEntries.map((coc, idx) => (
-                      <div 
-                        key={coc.id || idx} 
-                        className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-1.5 relative border-l-2 border-l-cyan-400"
-                      >
-                        <div className="flex items-center justify-between text-[10px]">
-                          <span className="font-mono text-cyan-400 font-bold flex items-center space-x-1">
-                            <UserCheck className="w-3 h-3" />
-                            <span>{coc.actor || coc.investigatorName || 'Investigator'}</span>
-                          </span>
-                          <span className="font-mono text-slate-400">{coc.timestamp}</span>
-                        </div>
-
-                        <div className="flex items-center justify-between">
-                          <p className="text-slate-100 font-bold text-xs font-sans">{coc.action}</p>
-                          <span className="text-[9px] font-mono text-slate-500 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
-                            {coc.caseId || activeArtifact.caseId} • {coc.evidenceId || activeArtifact.id}
-                          </span>
-                        </div>
-
-                        <p className="text-slate-300 text-[11px] font-sans leading-relaxed pt-0.5">
-                          {coc.notes}
-                        </p>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-6 text-slate-500 text-xs">
-                      No custody records logged for this artifact yet.
-                    </div>
-                  )}
                 </div>
-              </div>
-            ) : (
-              <EmptyState
-                icon={History}
-                title="No Custody Timeline"
-                description="Select an artifact to view its chain of custody timeline."
-              />
-            )}
-          </div>
 
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-1">Custody Notes / Description:</label>
+                  <input
+                    id="input-coc-notes"
+                    type="text"
+                    value={cocNotes}
+                    onChange={(e) => setCocNotes(e.target.value)}
+                    placeholder="e.g. Conducted YARA memory scan for LSASS process injection..."
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
+                  />
+                </div>
+
+                <button
+                  id="btn-append-custody"
+                  type="submit"
+                  className="w-full py-2 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold rounded-lg text-xs transition-all shadow-md font-sans flex items-center justify-center space-x-1"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Append Custody Event</span>
+                </button>
+              </form>
+
+              {/* Custody Timeline (Newest Event First) */}
+              <div className="space-y-3 max-h-72 overflow-y-auto pr-1 w-full min-w-0">
+                {sortedCocEntries.length > 0 ? (
+                  sortedCocEntries.map((coc, idx) => (
+                    <div 
+                      key={coc.id || idx} 
+                      className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-1.5 relative border-l-2 border-l-cyan-400 w-full min-w-0"
+                    >
+                      <div className="flex items-center justify-between text-[10px] gap-2 min-w-0">
+                        <span className="font-mono text-cyan-400 font-bold flex items-center space-x-1 truncate min-w-0">
+                          <UserCheck className="w-3 h-3 shrink-0" />
+                          <span className="truncate">{coc.actor || coc.investigatorName || 'Investigator'}</span>
+                        </span>
+                        <span className="font-mono text-slate-400 shrink-0">{coc.timestamp}</span>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-2 min-w-0">
+                        <p className="text-slate-100 font-bold text-xs font-sans truncate min-w-0">{coc.action}</p>
+                        <span className="text-[9px] font-mono text-slate-500 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800 shrink-0">
+                          {coc.caseId || activeArtifact.caseId} • {coc.evidenceId || activeArtifact.id}
+                        </span>
+                      </div>
+
+                      <p className="text-slate-300 text-[11px] font-sans leading-relaxed pt-0.5 break-words">
+                        {coc.notes}
+                      </p>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-6 text-slate-500 text-xs">
+                    No custody records logged for this artifact yet.
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <EmptyState
+              icon={History}
+              title="No Custody Timeline"
+              description="Select an artifact to view its chain of custody timeline."
+            />
+          )}
         </div>
+
       </div>
 
       {/* MODAL 1: Password Verification Dialog */}
@@ -1025,6 +1021,7 @@ This file represents verified digital forensic evidence extracted in NetTrace V1
                     onChange={(e) => {
                       if (e.target.files && e.target.files[0]) {
                         const file = e.target.files[0];
+                        setSelectedFile(file);
                         setRegName(file.name);
                         setRegSize(file.size || 52428800);
                         setRegFileSimulated(file.name);
