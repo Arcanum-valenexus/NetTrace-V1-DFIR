@@ -1,5 +1,5 @@
 export const API_BASE_URL =
-  import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+  (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000/api/v1';
 
 export const getAccessToken = (): string | null => {
   try {
@@ -37,6 +37,7 @@ export const clearAuthTokens = () => {
 
 interface FetchOptions extends RequestInit {
   skipAuthToken?: boolean;
+  isFormData?: boolean;
 }
 
 let isRefreshing = false;

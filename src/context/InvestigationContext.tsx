@@ -4,6 +4,7 @@ import {
   PcapSession, 
   IOC, 
   EvidenceArtifact, 
+  EvidenceCategory,
   ChainOfCustodyEntry,
   ForensicsReport,
   ForensicsReportHistoryEntry, 
@@ -112,6 +113,7 @@ interface InvestigationContextType {
   updateIocStatus: (id: string, status: IOC['status']) => void;
 
   // Evidence actions
+  uploadEvidenceFile: (file: File, category: string, caseId: string, incidentId: string, description?: string) => Promise<EvidenceArtifact>;
   addEvidenceArtifact: (artifact: Omit<EvidenceArtifact, 'id' | 'uploadedAt' | 'chainOfCustody'> & Partial<Pick<EvidenceArtifact, 'caseId' | 'accessPassword' | 'description' | 'tags' | 'ownerInvestigatorId' | 'ownerInvestigatorName'>>) => void;
   updateEvidenceMetadata: (evidenceId: string, metadata: { name: string; category: EvidenceArtifact['category']; description?: string; tags?: string[] }) => void;
   deleteEvidenceArtifact: (evidenceId: string) => void;
@@ -546,7 +548,7 @@ export const InvestigationProvider: React.FC<{ children: React.ReactNode }> = ({
           caseId: a.caseId || cases[0]?.id || '',
           incidentId: a.incidentId || selectedIncident?.id || incidents[0]?.id || '',
           name: a.name,
-          category: a.category,
+          category: a.category as EvidenceCategory,
           sizeBytes: a.sizeBytes,
           hashSha256: a.hashSha256,
           hashMd5: a.hashMd5,
@@ -557,6 +559,7 @@ export const InvestigationProvider: React.FC<{ children: React.ReactNode }> = ({
           ownerInvestigatorId: 'inv-001',
           ownerInvestigatorName: a.uploadedBy,
           accessPassword: 'Protected',
+          storagePath: a.storagePath || `/vault/evidence/${a.id}`,
           chainOfCustody: (a.chainOfCustody || []).map((c: any) => ({
             id: c.id,
             evidenceId: c.evidenceId,
@@ -594,7 +597,7 @@ export const InvestigationProvider: React.FC<{ children: React.ReactNode }> = ({
         caseId: liveArtifact.caseId,
         incidentId: liveArtifact.incidentId,
         name: liveArtifact.name,
-        category: liveArtifact.category,
+        category: liveArtifact.category as EvidenceCategory,
         sizeBytes: liveArtifact.sizeBytes,
         hashSha256: liveArtifact.hashSha256,
         hashMd5: liveArtifact.hashMd5,
@@ -605,6 +608,7 @@ export const InvestigationProvider: React.FC<{ children: React.ReactNode }> = ({
         ownerInvestigatorId: 'inv-001',
         ownerInvestigatorName: liveArtifact.uploadedBy,
         accessPassword: 'Protected',
+        storagePath: liveArtifact.storagePath || `/vault/evidence/${liveArtifact.id}`,
         chainOfCustody: (liveArtifact.chainOfCustody || []).map((c: any) => ({
           id: c.id,
           evidenceId: c.evidenceId,
@@ -1787,6 +1791,7 @@ export const InvestigationProvider: React.FC<{ children: React.ReactNode }> = ({
         addIoc,
         parseAndExtractIocs,
         updateIocStatus,
+        uploadEvidenceFile,
         addEvidenceArtifact,
         updateEvidenceMetadata,
         deleteEvidenceArtifact,
